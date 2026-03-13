@@ -44,7 +44,9 @@ io.on('connection', (socket) => {
     if (data.direction === 'W') player.x -= data.steps;
     if (data.direction === 'E') player.x += data.steps;
 
-    // 极其简陋的空气墙（防止跑出屏幕）
+    // 🔥 新增这一行：记录最后一次移动的方向，发给前端
+    player.lastDirection = data.direction; 
+
     player.x = Math.max(0, Math.min(MAP_WIDTH - 1, player.x));
     player.y = Math.max(0, Math.min(MAP_HEIGHT - 1, player.y));
 
