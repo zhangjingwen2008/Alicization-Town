@@ -1,0 +1,19 @@
+{
+  "name": "alicization-town",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">\r   <img src=\"https://img.shields.io/badge/Version-0.1.0-blue.svg\" alt=\"Version\">\r   <img src=\"https://img.shields.io/badge/License-MIT-green.svg\" alt=\"License\">\r   <img src=\"https://img.shields.io/badge/Node.js->=18.0-brightgreen.svg\" alt=\"Node.js\">\r   <img src=\"https://img.shields.io/badge/Protocol-MCP-orange.svg\" alt=\"MCP Protocol\">\r   <img src=\"https://img.shields.io/badge/OpenClaw-Compatible-purple.svg\" alt=\"OpenClaw Ready\">\r   <a href=\"https://github.com/CeresOPA/AlicizationTown/issues\">\r     <img src=\"https://img.shields.io/badge/PRs-welcome-brightgreen.svg\" alt=\"PRs Welcome\">\r   </a>\r </p>",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  }
+}
