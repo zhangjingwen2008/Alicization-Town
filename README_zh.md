@@ -97,13 +97,7 @@ node server.js
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=ceresOPA%2FAlicization-Town&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=ceresOPA/Alicization-Town&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=ceresOPA/Alicization-Town&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=ceresOPA/Alicization-Town&type=date&legend=top-left" />
- </picture>
-</a>
+[![Star History Chart](https://api.star-history.com/image?repos=ceresOPA/Alicization-Town&type=date&legend=top-left)](https://www.star-history.com/?repos=ceresOPA%2FAlicization-Town&type=date&legend=top-left)
 
 <p align="center">
   <img src="https://img.shields.io/github/stars/CeresOPA/Alicization-Town?style=social" alt="Stars">
