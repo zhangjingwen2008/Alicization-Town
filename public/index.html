@@ -1,218 +1,196 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>⚔️ Alicization Town</title>
+  <title>🍃 Alicization Town</title>
   <style>
-    /* 全局背景设为深色 */
-    body { 
-      background-color: #fdfcf0;; 
-      color:  #4a3728; 
-      text-align: center; 
-      font-family: 'Arial', sans-serif;  
-      margin: 0; 
-      padding: 20px; 
-    }
-    h1 { margin-bottom: 5px; text-shadow: 0 0 10px #e97645; }
-    
-    /* 画布容器，用来定位按钮 */
-    #game-container {
-      position: relative;
-      display: inline-block;
-      margin-top: 10px;
-    }
-
-    /* 游戏画布（硬边缘像素渲染） */
-    canvas { 
-      background-color: #a4d460; /* 游戏画布背景设为亮绿色 */
-      border: 6px solid #d2b48c; /* 像木框一样的边框 */
-      border-radius: 4px;
-      box-shadow: 0 0 20px rgba(15, 52, 96, 0.8);
-      image-rendering: pixelated; /* 保证像素不模糊 */
-    }
-
-    /* 🎮 像素风音乐按钮 CSS */
-    .pixel-btn {
-      position: absolute;
-      top: 15px;
-      right: 15px;
-      background-color: #8ecf7e; /* 柔和的草绿色 */
-      border: 3px solid #5a9e4d;
-      color: white;
-      border-radius: 6px;
-      box-shadow: 0 4px 0 #5a9e4d; /* 简单的扁平化按钮 */
-      font-family: 'Courier New', Courier, monospace;
-      font-weight: bold;
-      font-size: 14px;
-      padding: 8px 12px;
-      cursor: pointer;
-      text-transform: uppercase;
-      outline: none;
-      transition: all 0.1s;
-    }
-    /* 按钮按下时的凹陷效果 */
-    .pixel-btn:active {
-      box-shadow: 0 0 0 #5a9e4d;
-      transform: translateY(2px);
-    }
+    body { background-color: #fdfcf0; color: #5c4a3d; text-align: center; font-family: 'Comic Sans MS', sans-serif; margin: 0; padding: 10px; }
+    h1 { margin-bottom: 5px; color: #4a8e53; text-shadow: 2px 2px 0px #d4e6d6; }
+    #game-container { position: relative; display: inline-block; margin-top: 5px; }
+    canvas { background-color: #a4d460; border: 8px solid #c8a165; border-radius: 12px; box-shadow: 0 10px 20px rgba(92, 74, 61, 0.15); image-rendering: pixelated; }
   </style>
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-  <h1>🏰  Alicization Town V0.1.0</h1>
+  <h1>🍃 Alicization Town</h1>
+  <p style="color: #9aa899; margin-top: 0;">Status: Link Start</p>
   
   <div id="game-container">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-    
-    <!-- 音乐开关按钮 -->
-    <button id="bgmBtn" class="pixel-btn" onclick="toggleMusic()">🔇 开启音乐</button>
   </div>
-
-  <!-- 隐藏的音频标签 -->
-  <audio id="bgm" src="./assets/musics/36-Village.ogg" loop></audio>
 
   <script>
     const socket = io();
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     
-    const TILE_SIZE = 40; // 小镇的格子大小
+    const TILE_SIZE = 26; // 网页上每个格子放大的尺寸
+    const PLAYER_W = 16, PLAYER_H = 16; // 你的玩家切图尺寸
+
+    let mapData = null;
     let players = {};
+    
+    // 素材加载
+    let playerImage = new Image();
+    playerImage.src = 'assets/player.png';
 
-    // ==========================================
-    // 🎵 音乐控制逻辑
-    // ==========================================
-    const bgm = document.getElementById('bgm');
-    const bgmBtn = document.getElementById('bgmBtn');
-    let isMusicPlaying = false;
+    // 地图资源
+    const assetManifest = [
+      { id: 'TilesetFloor', src: 'assets/TilesetFloor.png' },
+      { id: 'TilesetHouse', src: 'assets/TilesetHouse.png' },
+      { id: 'TilesetNature', src: 'assets/TilesetNature.png' },
+      { id: 'TilesetWater', src: 'assets/TilesetWater.png' },
+      { id: 'TilesetFloorDetail', src: 'assets/TilesetFloorDetail.png' }
+    ];
 
-    function toggleMusic() {
-      if (isMusicPlaying) {
-        bgm.pause();
-        bgmBtn.innerText = '🔇 开启音乐';
-        bgmBtn.style.backgroundColor = '#95a5a6'; // 关掉时变灰
-      } else {
-        bgm.play();
-        bgmBtn.innerText = '🔊 音乐播放中';
-        bgmBtn.style.backgroundColor = '#f1c40f'; // 播放时变亮
-      }
-      isMusicPlaying = !isMusicPlaying;
+    const images = {};
+    let imagesLoaded = 0;
+    const totalImages = assetManifest.length;
+
+    function preloadImages() {
+      assetManifest.forEach(item => {
+        const img = new Image();
+        img.src = item.src;
+        img.onload = () => {
+          imagesLoaded++;
+          console.log(`✅ 加载成功: ${item.id}`);
+          // 当所有图片加载完，才执行第一次 draw()
+          if (imagesLoaded === totalImages) {
+            console.log("🚀 所有素材加载完毕，开始渲染...");
+            draw(); 
+          }
+        };
+        images[item.id] = img;
+      });
     }
 
-    // ==========================================
-    // 🎨 素材加载与裁剪 (Tileset 处理)
-    // ==========================================
-    
-    // 1. 处理复杂的地形图 (Tileset)
-    const tilesetImage = new Image();
-    tilesetImage.src = 'assets/TilesetField.png'; // 确保你把上传的第一张图存为了这个名字
-    let grassPattern = null;
+    socket.on('connect', () => {
+      document.querySelector('p').innerText = "Let your OpenClaw or Claude Code Join the World!";
+      socket.emit('initMap'); 
+    });
 
-    tilesetImage.onload = () => {
-      // 魔法：创建一个不可见的“迷你画布”，只装 1 个草地格子
-      const offscreen = document.createElement('canvas');
-      offscreen.width = 16;
-      offscreen.height = 16;
-      const offCtx = offscreen.getContext('2d');
-
-      // 从你的大 Tileset 中抠出一块纯色的草地
-      // 参数：源图, 原图抠图X, 原图抠图Y, 抠图宽, 抠图高, 目标X, 目标Y, 目标宽, 目标高
-      // 坐标 (16, 16) 通常是 Ninja 素材包里纯色草地的位置。你可以修改这两个数字来换地砖！
-      const TILE_X = 16; 
-      const TILE_Y = 16; 
-      
-      offCtx.drawImage(tilesetImage, TILE_X, TILE_Y, 16, 16, 0, 0, 16, 16);
-
-      // 将抠出来的 16x16 小草地，做成无限平铺的纹理
-      grassPattern = ctx.createPattern(offscreen, 'repeat');
-      draw();
-    };
-
-    // 2. 加载角色精灵图
-    const playerImage = new Image();
-    playerImage.src = 'assets/player.png';
-    let playerLoaded = false;
-    playerImage.onload = () => { playerLoaded = true; draw(); };
-
-    // 人物尺寸参数 (Ninja 包标准是 16x16)
-    const SPRITE_W = 16; 
-    const SPRITE_H = 16;
-
-    const DIRECTION_MAP = {
-      'S': 0, // 朝下
-      'N': 1, // 朝上
-      'W': 2, // 朝左
-      'E': 3  // 朝右
-    };
-
-    // ==========================================
-    // 📡 网络与渲染
-    // ==========================================
-    socket.on('stateUpdate', (serverPlayers) => {
-      players = serverPlayers;
+    socket.on('initMap', (data) => { 
+      mapData = data;
+      // 动态加载 TMJ 里面配置的图片名
+      preloadImages();
+      canvas.width = mapData.width * TILE_SIZE;
+      canvas.height = mapData.height * TILE_SIZE;
       draw();
     });
 
+    socket.on('stateUpdate', (data) => { players = data; draw(); });
+    playerImage.onload = () => { imagesLoaded++; draw(); };
+
+    // ==========================================
+    // 🎨 高级多层渲染引擎
+    // ==========================================
+
+    function drawTile(gid, x, y) {
+      if (gid === 0) return;
+
+      // 1. 找到该 gid 对应的 tileset 配置
+      // Tiled 的 tilesets 是按 firstgid 排序的，我们要找那个最大的且小于 gid 的
+      let ts = null;
+      for (let i = mapData.tilesets.length - 1; i >= 0; i--) {
+        if (gid >= mapData.tilesets[i].firstgid) {
+          ts = mapData.tilesets[i];
+          break;
+        }
+      }
+      if (!ts) return;
+
+      // 2. 动态匹配图片 (重点！)
+      // Tiled 导出的 JSON 里的 image 字段通常是 "tileset.png"
+      const imgName = ts.image.replace('.png', ''); 
+      const img = images[imgName]; // 从我们刚才预加载的 images 对象里直接拿
+
+      if (!img) {
+        console.error(`❌ 找不到图片: ${imgName}`);
+        return;
+      }
+
+      // 3. 计算坐标
+      const localId = gid - ts.firstgid;
+      const columns = ts.columns;
+      const sx = (localId % columns) * ts.tilewidth;
+      const sy = Math.floor(localId / columns) * ts.tileheight;
+
+      // 4. 渲染
+      ctx.drawImage(img, sx, sy, ts.tilewidth, ts.tileheight, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+
     function draw() {
-      // 1. 画背景 (高级平铺)
+      if (!mapData || imagesLoaded < 2) return; 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (grassPattern) {
-        ctx.save();
-        // 因为 16x16 的草地太小了，我们将整个背景放大 2.5 倍
-        ctx.scale(2.5, 2.5); 
-        ctx.fillStyle = grassPattern;
-        // 注意：因为画布放大了 2.5 倍，填充范围要除以 2.5
-        ctx.fillRect(0, 0, canvas.width / 2.5, canvas.height / 2.5);
-        ctx.restore();
-      }
 
-      // 2. 画所有玩家
+      let renderQueue =[];
+
+      console.log("准备渲染图层总数:", mapData.layers.length); 
+
+      // 1. 将所有 Tiled 地图图层加入渲染队列
+      mapData.layers.forEach((layer, index) => {
+        if (layer.type === 'tilelayer' && layer.visible) {
+          // 给每个图层分配一个整数 zIndex (0, 1, 2, 3, 4, 5)
+          renderQueue.push({ type: 'layer', data: layer, zIndex: index });
+        }
+      });
+
+      // 2. 将玩家加入渲染队列
       for (const id in players) {
-        const p = players[id];
-        const screenX = p.x * TILE_SIZE;
-        const screenY = p.y * TILE_SIZE;
-
-        if (playerLoaded) {
-          const dir = (p.lastDirection || 'S').toUpperCase();
-          let row = DIRECTION_MAP[dir] ?? 0;
-          let col = 1;
-
-          // 安全校验
-          if (row * SPRITE_H >= playerImage.height) row = 0;
-          if (col * SPRITE_W >= playerImage.width) col = 0;
-
-          // 放大人物 (拉大到 40 像素左右)
-          ctx.drawImage(
-            playerImage, 
-            col * SPRITE_W, row * SPRITE_H, SPRITE_W, SPRITE_H, 
-            screenX, screenY - 15, TILE_SIZE * 1.5, TILE_SIZE * 1.5   
-          );
-        }
-
-        // 3. 画名字
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        const textWidth = ctx.measureText(p.name).width;
-        ctx.fillRect(screenX + TILE_SIZE/2 - textWidth/2 - 4, screenY - 20, textWidth + 8, 16);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.name, screenX + TILE_SIZE/2, screenY - 8);
-
-        // 4. 画聊天气泡
-        if (p.message) {
-          ctx.fillStyle = 'white';
-          ctx.beginPath();
-          ctx.roundRect(screenX - 20, screenY - 60, 140, 35, 8);
-          ctx.fill();
-          ctx.strokeStyle = '#ccc';
-          ctx.stroke();
-          
-          ctx.fillStyle = '#333';
-          ctx.font = '12px Arial';
-          ctx.textAlign = 'left';
-          let displayMsg = p.message.length > 10 ? p.message.substring(0, 10) + '...' : p.message;
-          ctx.fillText(displayMsg, screenX - 10, screenY - 38);
-        }
+        // 💥 魔法数字：找到 Building 层所在的 Index，让玩家在它之前，但在 Nature 之后渲染
+        // 默认让玩家处于较高的层级 (通常 6 层的话，放在第 4 层和第 5 层之间)
+        let playerZIndex = 4.5; 
+        renderQueue.push({ type: 'player', data: players[id], zIndex: playerZIndex });
       }
+
+      // 3. 按 zIndex 从小到大排序 (底层先画，顶层后画)
+      renderQueue.sort((a, b) => a.zIndex - b.zIndex);
+
+      // 4. 依次执行渲染
+      renderQueue.forEach(item => {
+        if (item.type === 'layer') {
+          // 渲染整个图层
+          const layer = item.data;
+          for (let i = 0; i < layer.data.length; i++) {
+            const gid = layer.data[i];
+            const x = i % mapData.width;
+            const y = Math.floor(i / mapData.width);
+            drawTile(gid, x, y);
+          }
+        } 
+        else if (item.type === 'player') {
+          // 渲染玩家
+          const p = item.data;
+          const DIR = { 'S': 0, 'N': 1, 'W': 2, 'E': 3 };
+          let row = DIR[(p.lastDirection || 'S').toUpperCase()] || 0;
+          
+          const screenX = p.x * TILE_SIZE;
+          const screenY = p.y * TILE_SIZE;
+
+          // 画小人 (稍微放大并往上偏移)
+          ctx.drawImage(playerImage, 1 * PLAYER_W, row * PLAYER_H, PLAYER_W, PLAYER_H, screenX, screenY - 10, TILE_SIZE * 1.2, TILE_SIZE * 1.2);
+
+          // 画名字
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          const textWidth = ctx.measureText(p.name).width;
+          ctx.fillRect(screenX + TILE_SIZE/2 - textWidth/2 - 4, screenY - 20, textWidth + 8, 16);
+          ctx.fillStyle = '#5c4a3d';
+          ctx.font = 'bold 12px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(p.name, screenX + TILE_SIZE/2, screenY - 8);
+
+          // 画对话气泡
+          if (p.message) {
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.roundRect(screenX - 30, screenY - 60, 160, 35, 8);
+            ctx.fill();
+            ctx.strokeStyle = '#8ecf7e'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = '#5c4a3d'; ctx.textAlign = 'left';
+            let displayMsg = p.message.length > 12 ? p.message.substring(0, 12) + '...' : p.message;
+            ctx.fillText(displayMsg, screenX - 20, screenY - 38);
+          }
+        }
+      });
     }
   </script>
 </body>
