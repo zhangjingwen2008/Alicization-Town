@@ -1,89 +1,218 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>🍃 Alicization Town</title>
+  <title>Alicization Town</title>
   <style>
-    /* 引入 Google 开源可爱像素字体 */
     @import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap');
 
-    body { 
-      background-color: #fdfcf0; 
-      color: #5c4a3d; 
-      text-align: center; 
-      font-family: 'Pixelify Sans', 'Comic Sans MS', sans-serif; 
-      margin: 0; 
-      padding: 10px; 
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #1a1a2e;
+      color: #5c4a3d;
+      font-family: 'Pixelify Sans', 'Comic Sans MS', sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      min-height: 100vh; padding: 10px;
     }
-    h1 { margin-bottom: 5px; color: #4a8e53; text-shadow: 2px 2px 0px #d4e6d6; font-size: 32px; }
-    #game-container { position: relative; display: inline-block; margin-top: 5px; }
-    canvas { 
-      background-color: #a4d460; 
-      border: 8px solid #c8a165; 
-      border-radius: 12px; 
-      box-shadow: 0 10px 20px rgba(92, 74, 61, 0.15); 
-      image-rendering: pixelated; 
-      cursor: crosshair; 
+    h1 { margin-bottom: 2px; color: #4a8e53; text-shadow: 2px 2px 0px #d4e6d6; font-size: 28px; }
+    #status-text { color: #9aa899; margin-top: 0; font-size: 16px; margin-bottom: 6px; }
+
+    #main-layout { display: flex; gap: 10px; align-items: flex-start; }
+
+    #game-container { position: relative; display: inline-block; flex-shrink: 0; }
+    canvas {
+      background-color: #a4d460;
+      border: 6px solid #c8a165;
+      border-radius: 10px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+      image-rendering: pixelated;
+      cursor: crosshair;
     }
+    #toolbar {
+      position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10;
+    }
+    .tool-btn {
+      background: rgba(255,255,255,0.88); border: 2px solid #c8a165;
+      border-radius: 8px; padding: 5px 10px; font-family: 'Pixelify Sans', sans-serif;
+      font-size: 13px; cursor: pointer; color: #5c4a3d; transition: background 0.2s;
+    }
+    .tool-btn:hover { background: rgba(255,255,255,1); }
+    #time-display {
+      position: absolute; top: 8px; left: 8px; z-index: 10;
+      background: rgba(0,0,0,0.5); color: #ffeaa7; border-radius: 8px;
+      padding: 4px 10px; font-size: 14px; font-family: 'Pixelify Sans', sans-serif;
+    }
+
+    /* Side panel: chat log + mini-map */
+    #side-panel {
+      width: 280px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+    }
+    #minimap-container {
+      background: rgba(40,40,60,0.9); border: 3px solid #c8a165;
+      border-radius: 10px; padding: 8px; text-align: center;
+    }
+    #minimap-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; }
+    #minimapCanvas { border-radius: 6px; image-rendering: pixelated; width: 100%; }
+
+    #chatlog-container {
+      background: rgba(40,40,60,0.9); border: 3px solid #c8a165;
+      border-radius: 10px; padding: 8px; flex: 1; min-height: 200px; max-height: 400px;
+      display: flex; flex-direction: column;
+    }
+    #chatlog-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
+    #chatlog {
+      flex: 1; overflow-y: auto; font-size: 12px; color: #ddd;
+      scrollbar-width: thin; scrollbar-color: #c8a165 transparent;
+    }
+    #chatlog::-webkit-scrollbar { width: 5px; }
+    #chatlog::-webkit-scrollbar-thumb { background: #c8a165; border-radius: 3px; }
+    .chat-entry { margin-bottom: 4px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.08); line-height: 1.4; }
+    .chat-name { color: #74b9ff; font-weight: 700; }
+    .chat-time { color: #636e72; font-size: 10px; }
+    .interaction-entry { color: #fdcb6e; font-style: italic; }
   </style>
 </head>
 <body>
-  <h1>🍃 Alicization Town</h1>
-  <p style="color: #9aa899; margin-top: 0; font-size: 18px;">Let your OpenClaw or ClaudeCode Join the World!</p>
+  <h1>Alicization Town</h1>
+  <p id="status-text">Let your OpenClaw or ClaudeCode Join the World!</p>
 
-  <div id="game-container">
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <button id="music-toggle" style="position:absolute; top:10px; right:10px; background:rgba(255,255,255,0.85); border:2px solid #c8a165; border-radius:8px; padding:6px 12px; font-family:'Pixelify Sans',sans-serif; font-size:14px; cursor:pointer; color:#5c4a3d; z-index:10;">🔇 Music</button>
+  <div id="main-layout">
+    <div id="game-container">
+      <div id="time-display">06:00</div>
+      <div id="toolbar">
+        <button class="tool-btn" id="music-toggle">Music OFF</button>
+      </div>
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+    <div id="side-panel">
+      <div id="minimap-container">
+        <h3>Mini Map</h3>
+        <canvas id="minimapCanvas" width="240" height="160"></canvas>
+      </div>
+      <div id="chatlog-container">
+        <h3>Chat Log</h3>
+        <div id="chatlog"></div>
+      </div>
+    </div>
   </div>
 
   <script>
+    // === PLACEHOLDER: Core variables ===
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const miniCanvas = document.getElementById('minimapCanvas');
+    const miniCtx = miniCanvas.getContext('2d');
+    const chatlogEl = document.getElementById('chatlog');
     const TILE_SIZE = 26;
 
-    // Background music setup
-    const bgm = new Audio('assets/musics/36-Village.ogg');
-    bgm.loop = true;
-    bgm.volume = 0.3;
-    let musicPlaying = false;
-    const musicBtn = document.getElementById('music-toggle');
-    musicBtn.addEventListener('click', () => {
-      if (musicPlaying) {
-        bgm.pause();
-        musicBtn.textContent = '🔇 Music';
-      } else {
-        bgm.play().catch(() => {});
-        musicBtn.textContent = '🔊 Music';
-      }
-      musicPlaying = !musicPlaying;
-    });
-    
-    // 动态计算小人尺寸 (假设是 4x4 网格，初始给个默认值)
-    let PLAYER_W = 16, PLAYER_H = 16; 
-    
+    let PLAYER_W = 16, PLAYER_H = 16;
     let mapData = null;
-    // 前端维护自己独立的玩家状态队列，用于平滑过渡
-    let clientPlayers = {}; 
-    
-    const images = {}; 
+    let clientPlayers = {};
+    const images = {};
     let imagesLoaded = 0;
-    let totalImagesToLoad = 1; 
-    
+    let totalImagesToLoad = 1;
     let mouseX = -1, mouseY = -1;
     let isGameLoopRunning = false;
 
-    // 加载玩家小人图，并自动计算切割尺寸
+    // === PLACEHOLDER: Day/night cycle state ===
+    let gameTime = 6 * 60; // minutes since midnight, start at 6:00 AM
+    const TIME_SPEED = 0.5; // game minutes per real second
+
+    // === PLACEHOLDER: Particle system ===
+    let particles = [];
+
+    // === PLACEHOLDER: Chat log data ===
+    let chatMessages = [];
+    const MAX_DISPLAY_MESSAGES = 100;
+
+    // === Background music ===
+    const bgm = new Audio('assets/musics/36-Village.ogg');
+    bgm.loop = true; bgm.volume = 0.3;
+    let musicPlaying = false;
+    const musicBtn = document.getElementById('music-toggle');
+    musicBtn.addEventListener('click', () => {
+      musicPlaying = !musicPlaying;
+      if (musicPlaying) { bgm.play().catch(() => {}); musicBtn.textContent = 'Music ON'; }
+      else { bgm.pause(); musicBtn.textContent = 'Music OFF'; }
+    });
+
+    // === Character sprite pool (loaded dynamically per player) ===
+    const CHARACTER_SPRITES = ['Custom1', 'Boy', 'Cavegirl', 'Eskimo', 'FighterRed', 'Monk', 'OldMan', 'Princess', 'Samurai', 'Skeleton', 'Vampire', 'Villager'];
+    const characterImages = {};
+    CHARACTER_SPRITES.forEach(name => {
+      const img = new Image();
+      img.src = `assets/characters/${name}.png`;
+      img.onload = () => { imagesLoaded++; };
+      characterImages[name] = img;
+      totalImagesToLoad++;
+    });
+    // Fallback default
     images['player'] = new Image();
     images['player'].src = 'assets/player.png';
-    images['player'].onload = () => { 
-      imagesLoaded++; 
-      // 自动适应 4x4 的图集
-      PLAYER_W = images['player'].width / 4; 
+    images['player'].onload = () => {
+      imagesLoaded++;
+      PLAYER_W = images['player'].width / 4;
       PLAYER_H = images['player'].height / 4;
     };
 
-    // ==========================================
-    // 🖱️ 鼠标事件
-    // ==========================================
+    // === Emote icons ===
+    const emoteImages = {};
+    for (let i = 1; i <= 16; i++) {
+      const img = new Image();
+      img.src = `assets/emotes/emote${i}.png`;
+      emoteImages[i] = img;
+    }
+
+    // === Item icons (for interaction bubbles) ===
+    const ITEM_NAMES = ['Noodle', 'Sushi', 'Fish', 'Onigiri', 'Meat', 'FortuneCookie', 'Honey', 'LifePot', 'MilkPot', 'WaterPot', 'Heart', 'Sword', 'Katana', 'Bow', 'GoldCoin', 'GoldKey'];
+    const itemImages = {};
+    ITEM_NAMES.forEach(name => {
+      const img = new Image();
+      img.src = `assets/items/${name}.png`;
+      itemImages[name] = img;
+    });
+
+    // === Sound effects ===
+    const sfx = {
+      interact: new Audio('assets/sounds/interact.wav'),
+      chat: new Audio('assets/sounds/chat.wav'),
+      magic: new Audio('assets/sounds/magic.wav'),
+      heal: new Audio('assets/sounds/heal.wav'),
+    };
+    Object.values(sfx).forEach(s => { s.volume = 0.25; });
+
+    // === NPC Animal sprites (2-frame animations, 16x16 each) ===
+    const animalImages = {};
+    ['Cat', 'Dog', 'Frog'].forEach(name => {
+      const img = new Image();
+      img.src = `assets/animals/${name}.png`;
+      animalImages[name] = img;
+    });
+
+    // === Animated decoration sprites (4-frame, 16x16 each) ===
+    const animDecorImages = {};
+    ['FlagRed', 'Flower', 'WaterRipple'].forEach(name => {
+      const img = new Image();
+      img.src = `assets/animated/${name}.png`;
+      animDecorImages[name] = img;
+    });
+
+    // === Sprite-based particle images ===
+    const particleSprites = {};
+    ['Leaf', 'LeafPink', 'Spark'].forEach(name => {
+      const img = new Image();
+      img.src = `assets/particles/${name}.png`;
+      particleSprites[name] = img;
+    });
+
+    // === NPC Animals state ===
+    let npcAnimals = [];
+    let npcAnimalsInitialized = false;
+
+    // === Animated decorations state ===
+    let animDecors = [];
+    let animDecorsInitialized = false;
+
+    // === Mouse events ===
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -92,20 +221,12 @@
       mouseY = (e.clientY - rect.top) * scaleY;
     });
     canvas.addEventListener('mouseleave', () => { mouseX = -1; mouseY = -1; });
-
-    // ==========================================
-    // 📡 Socket 监听
-    // ==========================================
-    // ==========================================
-    // 📺 核心变更：使用 EventSource 监听数据流
-    // ==========================================
+    // === initialize() ===
     async function initialize() {
-      // 1. 先加载静态的地图文件
       try {
         const response = await fetch('assets/map.tmj');
         mapData = await response.json();
-        
-        // 2. 预加载所有地图和人物图片
+
         if (mapData.tilesets) {
           totalImagesToLoad += mapData.tilesets.length;
           mapData.tilesets.forEach(ts => {
@@ -118,116 +239,447 @@
         canvas.width = mapData.width * TILE_SIZE;
         canvas.height = mapData.height * TILE_SIZE;
 
-        // 3. 连接到 SSE 数据流
+        // SSE connection
         const eventSource = new EventSource('/events');
-        
         eventSource.onopen = () => {
-          document.querySelector('p').innerText = "✅ Let your OpenClaw or ClaudeCode Join the World!";
+          document.getElementById('status-text').innerText = "Connected - Let your OpenClaw or ClaudeCode Join the World!";
         };
-        
-        // 4. 收到新状态时，更新 players 数据
         eventSource.onmessage = (event) => {
           const serverPlayers = JSON.parse(event.data);
-
-          // 💥 这里必须做“平滑处理”，否则小人会瞬移，而不是走动
           for (const id in serverPlayers) {
-              const sp = serverPlayers[id];
-              if (!clientPlayers[id]) {
-                  // 新玩家，初始化
-                  clientPlayers[id] = { ...sp, displayX: sp.x * TILE_SIZE, displayY: sp.y * TILE_SIZE, targetX: sp.x * TILE_SIZE, targetY: sp.y * TILE_SIZE, animFrame: 0 };
-              } else {
-                  // 💥 这里：更新目标坐标，交给 gameLoop 去平滑滑动
-                  clientPlayers[id].targetX = sp.x * TILE_SIZE;
-                  clientPlayers[id].targetY = sp.y * TILE_SIZE;
-                  clientPlayers[id].lastDirection = sp.lastDirection;
-                  clientPlayers[id].message = sp.message;
-                  clientPlayers[id].name = sp.name;
-                  clientPlayers[id].isThinking = sp.isThinking; // 别忘了加上思考状态
+            const sp = serverPlayers[id];
+            if (!clientPlayers[id]) {
+              clientPlayers[id] = { ...sp, displayX: sp.x * TILE_SIZE, displayY: sp.y * TILE_SIZE, targetX: sp.x * TILE_SIZE, targetY: sp.y * TILE_SIZE, animFrame: 0 };
+            } else {
+              clientPlayers[id].targetX = sp.x * TILE_SIZE;
+              clientPlayers[id].targetY = sp.y * TILE_SIZE;
+              clientPlayers[id].lastDirection = sp.lastDirection;
+              clientPlayers[id].message = sp.message;
+              clientPlayers[id].interactionText = sp.interactionText;
+              clientPlayers[id].interactionIcon = sp.interactionIcon;
+              clientPlayers[id].sprite = sp.sprite;
+              clientPlayers[id].name = sp.name;
+              clientPlayers[id].isThinking = sp.isThinking;
+
+              // Play sound when interaction starts
+              if (sp.interactionSound && !clientPlayers[id]._lastSound) {
+                clientPlayers[id]._lastSound = sp.interactionSound;
+                if (sfx[sp.interactionSound]) sfx[sp.interactionSound].cloneNode().play().catch(() => {});
               }
+              if (!sp.interactionSound) clientPlayers[id]._lastSound = null;
+            }
           }
-          // 自动清理断开连接的玩家
           for (const id in clientPlayers) {
-              if (!serverPlayers[id]) delete clientPlayers[id];
+            if (!serverPlayers[id]) delete clientPlayers[id];
           }
-
         };
-        
+        // Chat history (initial batch)
+        eventSource.addEventListener('chatHistory', (event) => {
+          const history = JSON.parse(event.data);
+          history.forEach(entry => addChatMessage(entry.name, entry.message, entry.time));
+        });
+        // Live chat messages
+        eventSource.addEventListener('chat', (event) => {
+          const entry = JSON.parse(event.data);
+          addChatMessage(entry.name, entry.message, entry.time);
+          sfx.chat.cloneNode().play().catch(() => {});
+        });
+        // Interaction events
+        eventSource.addEventListener('interaction', (event) => {
+          const entry = JSON.parse(event.data);
+          addInteractionMessage(entry);
+        });
         eventSource.onerror = () => {
-          document.querySelector('p').innerText = "❌ 与服务器断开，正在尝试重连...";
+          document.getElementById('status-text').innerText = "Disconnected - Reconnecting...";
         };
 
-        // 5. 启动 60fps 游戏主循环
+        // Initialize particles
+        initParticles();
+        // Initialize NPC animals and decorations (after map loads)
+        initNpcAnimals();
+        initAnimDecors();
+
         if (!isGameLoopRunning) {
           isGameLoopRunning = true;
+          lastFrameTime = performance.now();
           requestAnimationFrame(gameLoop);
         }
       } catch (error) {
-        document.querySelector('p').innerText = "😱 加载地图失败！请检查 public/assets/map.tmj 是否存在。";
-        console.error("加载地图失败:", error);
+        document.getElementById('status-text').innerText = "Failed to load map!";
+        console.error("Load error:", error);
       }
     }
 
-    // ==========================================
-    // 🎮 游戏主循环 (60 FPS 引擎)
-    // ==========================================
-    function gameLoop() {
+    // === gameLoop() ===
+    let lastFrameTime = 0;
+    function gameLoop(timestamp) {
+      const dt = (timestamp - lastFrameTime) / 1000; // delta in seconds
+      lastFrameTime = timestamp;
+
       if (mapData && imagesLoaded >= totalImagesToLoad) {
-        updatePhysics(); // 计算滑动和动画
-        draw();          // 绘制到屏幕
+        updateDayNight(dt);
+        updateParticles(dt);
+        updateNpcAnimals(dt);
+        updatePhysics();
+        draw();
+        drawMinimap();
       }
-      requestAnimationFrame(gameLoop); // 递归调用，保持 60 帧
+      requestAnimationFrame(gameLoop);
     }
 
-    // 核心物理动画引擎
+    // === updatePhysics() ===
     function updatePhysics() {
-      const MOVE_SPEED = 2;   // 每次刷新的滑动像素
-      const ANIM_SPEED = 0.15; // 摆腿动画播放速度
-
+      const MOVE_SPEED = 2;
+      const ANIM_SPEED = 0.15;
       for (const id in clientPlayers) {
         const p = clientPlayers[id];
         let isMoving = false;
-
-        // 平滑 X 轴
         if (p.displayX < p.targetX) { p.displayX = Math.min(p.displayX + MOVE_SPEED, p.targetX); isMoving = true; }
         else if (p.displayX > p.targetX) { p.displayX = Math.max(p.displayX - MOVE_SPEED, p.targetX); isMoving = true; }
-
-        // 平滑 Y 轴
         if (p.displayY < p.targetY) { p.displayY = Math.min(p.displayY + MOVE_SPEED, p.targetY); isMoving = true; }
         else if (p.displayY > p.targetY) { p.displayY = Math.max(p.displayY - MOVE_SPEED, p.targetY); isMoving = true; }
+        if (isMoving) { p.animFrame += ANIM_SPEED; if (p.animFrame >= 4) p.animFrame = 0; }
+        else { p.animFrame = 0; }
+      }
+    }
+    // === Day/night cycle ===
+    function updateDayNight(dt) {
+      gameTime += TIME_SPEED * dt * 60; // advance game time
+      if (gameTime >= 1440) gameTime -= 1440; // wrap at midnight
 
-        // 步态动画循环 (0, 1, 2, 3)
-        if (isMoving) {
-          p.animFrame += ANIM_SPEED;
-          if (p.animFrame >= 4) p.animFrame = 0; 
-        } else {
-          p.animFrame = 0; // 停下来时，恢复立正站好 (第0帧)
-        }
+      const hours = Math.floor(gameTime / 60);
+      const mins = Math.floor(gameTime % 60);
+      document.getElementById('time-display').textContent =
+        `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+
+    function getDayNightOverlay() {
+      // Returns {color, alpha} for the time-of-day tint
+      const h = gameTime / 60; // hour as float
+      if (h >= 6 && h < 8) {
+        // Dawn: orange tint fading out
+        const t = (h - 6) / 2;
+        return { r: 255, g: 180, b: 100, a: 0.15 * (1 - t) };
+      } else if (h >= 8 && h < 17) {
+        // Daytime: no overlay
+        return { r: 0, g: 0, b: 0, a: 0 };
+      } else if (h >= 17 && h < 19) {
+        // Sunset: warm orange
+        const t = (h - 17) / 2;
+        return { r: 255, g: 140, b: 50, a: 0.12 * t };
+      } else if (h >= 19 && h < 21) {
+        // Dusk: darkening blue
+        const t = (h - 19) / 2;
+        return { r: 20, g: 20, b: 80, a: 0.12 + 0.25 * t };
+      } else if (h >= 21 || h < 4) {
+        // Night: deep blue
+        return { r: 10, g: 10, b: 50, a: 0.4 };
+      } else {
+        // Pre-dawn (4-6): gradually lightening
+        const t = (h - 4) / 2;
+        return { r: 30, g: 20, b: 80, a: 0.4 * (1 - t) };
       }
     }
 
-    // 画图块辅助函数
+    function isNight() { return gameTime >= 1260 || gameTime < 300; } // 9pm to 5am
+
+    // === Particle system ===
+    function initParticles() {
+      particles = [];
+      // We'll spawn particles dynamically in updateParticles
+    }
+
+    function spawnFirefly() {
+      if (!mapData) return;
+      const cw = mapData.width * TILE_SIZE;
+      const ch = mapData.height * TILE_SIZE;
+      particles.push({
+        type: 'firefly',
+        x: Math.random() * cw,
+        y: Math.random() * ch,
+        vx: (Math.random() - 0.5) * 15,
+        vy: (Math.random() - 0.5) * 10,
+        life: 4 + Math.random() * 6,
+        maxLife: 10,
+        phase: Math.random() * Math.PI * 2,
+        size: 1.5 + Math.random() * 1.5,
+      });
+    }
+
+    function spawnLeaf(zoneX, zoneY, zoneW, zoneH) {
+      const scaleX = TILE_SIZE / mapData.tilewidth;
+      const scaleY = TILE_SIZE / mapData.tileheight;
+      particles.push({
+        type: 'leaf',
+        x: zoneX * scaleX + Math.random() * zoneW * scaleX,
+        y: zoneY * scaleY - 10,
+        vx: 8 + Math.random() * 12,
+        vy: 15 + Math.random() * 10,
+        life: 3 + Math.random() * 2,
+        maxLife: 5,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 4,
+        size: 2 + Math.random() * 2,
+      });
+    }
+
+    function spawnWaterShimmer(zoneX, zoneY, zoneW, zoneH) {
+      const scaleX = TILE_SIZE / mapData.tilewidth;
+      const scaleY = TILE_SIZE / mapData.tileheight;
+      const w = Math.max(zoneW * scaleX, 20);
+      const h = Math.max(zoneH * scaleY, 20);
+      particles.push({
+        type: 'shimmer',
+        x: zoneX * scaleX + Math.random() * w,
+        y: zoneY * scaleY + Math.random() * h,
+        life: 0.8 + Math.random() * 1.2,
+        maxLife: 2,
+        size: 1 + Math.random() * 2,
+      });
+    }
+
+    let particleTimer = 0;
+    function updateParticles(dt) {
+      particleTimer += dt;
+
+      // Spawn fireflies at night
+      if (isNight() && particleTimer > 0.3) {
+        particleTimer = 0;
+        if (particles.filter(p => p.type === 'firefly').length < 25) {
+          spawnFirefly();
+        }
+      }
+
+      // Spawn leaves near trees and shimmer near water (less frequently)
+      if (mapData && Math.random() < dt * 0.5) {
+        const zoneLayer = mapData.layers.find(l => l.name === 'SemanticZones' || l.type === 'objectgroup');
+        if (zoneLayer && zoneLayer.objects) {
+          zoneLayer.objects.forEach(zone => {
+            const name = (zone.name || '').toLowerCase();
+            if (name.includes('tree') && Math.random() < 0.05) {
+              spawnLeaf(zone.x, zone.y, zone.width || 30, zone.height || 30);
+            }
+            if (name.includes('pond') && Math.random() < 0.08) {
+              spawnWaterShimmer(zone.x, zone.y, zone.width || 20, zone.height || 30);
+            }
+          });
+        }
+      }
+
+      // Update existing particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+        if (p.type === 'firefly') {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          // Gentle direction changes
+          p.vx += (Math.random() - 0.5) * 20 * dt;
+          p.vy += (Math.random() - 0.5) * 15 * dt;
+          p.vx = Math.max(-20, Math.min(20, p.vx));
+          p.vy = Math.max(-15, Math.min(15, p.vy));
+        } else if (p.type === 'leaf') {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.rot += p.rotSpeed * dt;
+        }
+        // shimmer stays still, just fades
+      }
+    }
+
+    // === NPC Animal System ===
+    function initNpcAnimals() {
+      if (!mapData || npcAnimalsInitialized) return;
+      npcAnimalsInitialized = true;
+      const zoneLayer = mapData.layers.find(l => l.name === 'SemanticZones' || l.type === 'objectgroup');
+      if (!zoneLayer || !zoneLayer.objects) return;
+      const scaleX = TILE_SIZE / mapData.tilewidth;
+      const scaleY = TILE_SIZE / mapData.tileheight;
+
+      zoneLayer.objects.forEach(zone => {
+        const name = (zone.name || '').toLowerCase();
+        const zx = zone.x * scaleX, zy = zone.y * scaleY;
+        const zw = (zone.width || 30) * scaleX, zh = (zone.height || 30) * scaleY;
+
+        // Spawn cats near buildings
+        if (name.includes('inn') || name.includes('noodle') || name.includes('warehouse')) {
+          npcAnimals.push(createAnimal('Cat', zx, zy, zw, zh));
+        }
+        // Spawn dogs near practice grounds
+        if (name.includes('practice') || name.includes('weapon')) {
+          npcAnimals.push(createAnimal('Dog', zx, zy, zw, zh));
+        }
+        // Spawn frogs near ponds
+        if (name.includes('pond')) {
+          npcAnimals.push(createAnimal('Frog', zx, zy, zw, zh));
+          npcAnimals.push(createAnimal('Frog', zx, zy, zw, zh));
+        }
+      });
+    }
+
+    function createAnimal(type, zx, zy, zw, zh) {
+      return {
+        type, zx, zy, zw, zh,
+        x: zx + Math.random() * zw,
+        y: zy + Math.random() * zh,
+        vx: 0, vy: 0,
+        animFrame: 0,
+        animTimer: 0,
+        moveTimer: Math.random() * 3,
+        idleTime: 2 + Math.random() * 4,
+        facing: Math.random() > 0.5 ? 1 : -1, // 1=right, -1=left
+      };
+    }
+
+    function updateNpcAnimals(dt) {
+      for (const a of npcAnimals) {
+        a.animTimer += dt;
+        if (a.animTimer > 0.4) { a.animTimer = 0; a.animFrame = (a.animFrame + 1) % 2; }
+
+        a.moveTimer -= dt;
+        if (a.moveTimer <= 0) {
+          // Pick new random direction within zone bounds
+          if (Math.random() < 0.6) {
+            const speed = 6 + Math.random() * 8;
+            const angle = Math.random() * Math.PI * 2;
+            a.vx = Math.cos(angle) * speed;
+            a.vy = Math.sin(angle) * speed * 0.5;
+            a.facing = a.vx >= 0 ? 1 : -1;
+            a.moveTimer = 0.5 + Math.random() * 1.5;
+          } else {
+            a.vx = 0; a.vy = 0;
+            a.moveTimer = a.idleTime + Math.random() * 3;
+          }
+        }
+
+        a.x += a.vx * dt;
+        a.y += a.vy * dt;
+        // Clamp to zone bounds
+        a.x = Math.max(a.zx, Math.min(a.x, a.zx + a.zw - 8));
+        a.y = Math.max(a.zy, Math.min(a.y, a.zy + a.zh - 8));
+      }
+    }
+
+    function drawNpcAnimals() {
+      for (const a of npcAnimals) {
+        const img = animalImages[a.type];
+        if (!img || !img.complete) continue;
+        const frameW = img.width / 2; // 2 frames
+        const frameH = img.height;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        if (a.facing < 0) {
+          // Flip horizontally
+          ctx.translate(a.x + TILE_SIZE * 0.6, a.y);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, a.animFrame * frameW, 0, frameW, frameH, 0, 0, TILE_SIZE * 0.6, TILE_SIZE * 0.6);
+        } else {
+          ctx.drawImage(img, a.animFrame * frameW, 0, frameW, frameH, a.x, a.y, TILE_SIZE * 0.6, TILE_SIZE * 0.6);
+        }
+        ctx.imageSmoothingEnabled = true;
+        ctx.restore();
+      }
+    }
+
+    // === Animated Decoration System ===
+    function initAnimDecors() {
+      if (!mapData || animDecorsInitialized) return;
+      animDecorsInitialized = true;
+      const zoneLayer = mapData.layers.find(l => l.name === 'SemanticZones' || l.type === 'objectgroup');
+      if (!zoneLayer || !zoneLayer.objects) return;
+      const scaleX = TILE_SIZE / mapData.tilewidth;
+      const scaleY = TILE_SIZE / mapData.tileheight;
+
+      zoneLayer.objects.forEach(zone => {
+        const name = (zone.name || '').toLowerCase();
+        const zx = zone.x * scaleX, zy = zone.y * scaleY;
+        const zw = (zone.width || 30) * scaleX, zh = (zone.height || 30) * scaleY;
+
+        // Place flowers near grassland and tree zones
+        if (name.includes('grass') || name.includes('tree')) {
+          const count = 2 + Math.floor(Math.random() * 3);
+          for (let i = 0; i < count; i++) {
+            animDecors.push({
+              type: 'Flower',
+              x: zx + Math.random() * zw,
+              y: zy + Math.random() * zh,
+              frame: Math.floor(Math.random() * 4),
+              speed: 0.12 + Math.random() * 0.08,
+              timer: Math.random() * 4,
+            });
+          }
+        }
+
+        // Place water ripples on pond surfaces
+        if (name.includes('pond')) {
+          const count = 3 + Math.floor(Math.random() * 3);
+          for (let i = 0; i < count; i++) {
+            animDecors.push({
+              type: 'WaterRipple',
+              x: zx + Math.random() * zw,
+              y: zy + Math.random() * zh,
+              frame: Math.floor(Math.random() * 4),
+              speed: 0.2 + Math.random() * 0.1,
+              timer: Math.random() * 4,
+            });
+          }
+        }
+
+        // Place flags near buildings (entrance area)
+        if (name.includes('noodle') || name.includes('inn') || name.includes('weapon') || name.includes('potion')) {
+          animDecors.push({
+            type: 'FlagRed',
+            x: zx - 4,
+            y: zy - 8,
+            frame: 0,
+            speed: 0.15,
+            timer: Math.random() * 4,
+          });
+        }
+      });
+    }
+
+    function drawAnimDecors(layerName) {
+      // layerName: 'bottom' for water/flowers, 'top' for flags
+      const now = Date.now() / 1000;
+      for (const d of animDecors) {
+        const img = animDecorImages[d.type];
+        if (!img || !img.complete) continue;
+
+        const isBottom = (d.type === 'WaterRipple' || d.type === 'Flower');
+        if ((layerName === 'bottom' && !isBottom) || (layerName === 'top' && isBottom)) continue;
+
+        const frameW = img.width / 4; // 4 frames
+        const frameH = img.height;
+        const frame = Math.floor((now * (1 / d.speed)) + d.timer) % 4;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, frame * frameW, 0, frameW, frameH, d.x, d.y, TILE_SIZE * 0.7, TILE_SIZE * 0.7);
+        ctx.imageSmoothingEnabled = true;
+      }
+    }
+
+    // === drawTile() ===
     function drawTile(gid, x, y) {
-      if (gid === 0) return; 
+      if (gid === 0) return;
       const ts = mapData.tilesets.slice().reverse().find(t => gid >= t.firstgid);
       if (!ts) return;
       const imgName = ts.image.split('/').pop();
       if (!images[imgName]) return;
-
-      const localId = gid - ts.firstgid; 
-      const columns = ts.columns; 
+      const localId = gid - ts.firstgid;
+      const columns = ts.columns;
       const sx = (localId % columns) * ts.tilewidth;
       const sy = Math.floor(localId / columns) * ts.tileheight;
       ctx.drawImage(images[imgName], sx, sy, ts.tilewidth, ts.tileheight, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
 
-    // ==========================================
-    // 🖌️ 渲染画面
-    // ==========================================
+    // === draw() - Main render function ===
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. 底层
-      const bottomLayers =["BaseFloor", "Floor", "BaseNature"];
+      // 1. Bottom layers
+      const bottomLayers = ["BaseFloor", "Floor", "BaseNature"];
       mapData.layers.forEach(layer => {
         if (layer.type === 'tilelayer' && bottomLayers.includes(layer.name) && layer.visible) {
           for (let i = 0; i < layer.data.length; i++) {
@@ -236,66 +688,104 @@
         }
       });
 
-      // 2. 玩家层 (用平滑的 Y 轴排序，防止滑动时出现诡异穿插)
+      // Water shimmer particles + animated water ripples + flowers (below players)
+      drawParticlesOfType('shimmer');
+      drawAnimDecors('bottom');
+
+      // NPC Animals (below players for Y-sorting illusion)
+      drawNpcAnimals();
+
+      // 2. Players (Y-sorted)
       let playerList = Object.values(clientPlayers).sort((a, b) => a.displayY - b.displayY);
       playerList.forEach(p => {
-        // 使用平滑坐标，而不是绝对网格坐标！
-        const sx = p.displayX; 
+        const sx = p.displayX;
         const sy = p.displayY;
-
-        // 行走图的方向映射 (假设第一行朝下，第二行朝上，第三行朝左，第四行朝右)
         const DIR = { 'S': 0, 'N': 1, 'W': 2, 'E': 3 };
         const col = DIR[(p.lastDirection || 'S').toUpperCase()] || 0;
-        const row = Math.floor(p.animFrame); // 当前走路的列
-        
-        // 绘制走路小人
-        ctx.drawImage(images['player'], col * PLAYER_W, row * PLAYER_H, PLAYER_W, PLAYER_H, sx, sy - 10, TILE_SIZE * 1.2, TILE_SIZE * 1.2);
-        
-        // 🌟 锐利像素描边名字 + 呼吸浮动动画
-        const centerX = sx + TILE_SIZE / 2;
-        const floatY = Math.sin(Date.now() / 300 + p.x) * 2; 
-        const nameY = sy - 15 + floatY; 
+        const row = Math.floor(p.animFrame);
 
+        // Use per-player character sprite or fallback
+        const spriteImg = (p.sprite && characterImages[p.sprite]) ? characterImages[p.sprite] : images['player'];
+        const pw = spriteImg.width / 4;
+        const ph = spriteImg.height / 4;
+        ctx.drawImage(spriteImg, col * pw, row * ph, pw, ph, sx, sy - 10, TILE_SIZE * 1.2, TILE_SIZE * 1.2);
+
+        // Name with breathing animation
+        const centerX = sx + TILE_SIZE / 2;
+        const floatY = Math.sin(Date.now() / 300 + p.x) * 2;
+        const nameY = sy - 15 + floatY;
         ctx.font = '400 14px "Pixelify Sans", "Comic Sans MS", sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
-        ctx.strokeStyle = 'rgba(26, 26, 46, 0.9)'; 
+        ctx.strokeStyle = 'rgba(26, 26, 46, 0.9)';
         ctx.strokeText(p.name, centerX, nameY);
         ctx.fillStyle = p.name === 'Observer' ? '#f1c40f' : '#ffffff';
         ctx.fillText(p.name, centerX, nameY);
 
-        // 聊天气泡 (跟着浮动)
-        const bubbleY = sy - 27 + floatY; // 气泡的 Y 坐标
+        // Thought / chat / interaction bubbles
+        const bubbleY = sy - 27 + floatY;
         if (p.isThinking) {
-          // 如果正在思考，画思考气泡
-          ctx.beginPath();
-          // 用三次贝塞尔曲线 (bezierCurveTo) 画出云朵的弧度
-          ctx.moveTo(centerX - 25, bubbleY);
-          ctx.bezierCurveTo(centerX - 40, bubbleY - 10, centerX - 25, bubbleY - 25, centerX, bubbleY - 25);
-          ctx.bezierCurveTo(centerX + 25, bubbleY - 25, centerX + 40, bubbleY - 10, centerX + 25, bubbleY);
-          ctx.closePath();
-          
+          // Thinking: emote bubble with cycling emotes (dots, question, exclamation)
+          const thinkEmotes = [1, 6, 2]; // emote1=dots, emote6=question, emote2=exclamation
+          const emoteIdx = thinkEmotes[Math.floor(Date.now() / 900) % thinkEmotes.length];
+          const emoteImg = emoteImages[emoteIdx];
+          // Draw small cloud bubble
+          const bw = 28, bh = 28;
+          const bx = centerX - bw / 2, by = bubbleY - bh;
           ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-          ctx.fill();
-          ctx.strokeStyle = '#a4b0be'; // 浅灰色边框，更柔和
-          ctx.lineWidth = 2.5;
-          ctx.stroke();
-
-          // 2. 在气泡里画一个大大的 Emoji/符号
-          ctx.font = 'bold 20px "Pixelify Sans", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = '#576574'; // 深灰色文字
-
-          // 🪄 魔法：让符号随时间循环变化 (💡 -> ❓ -> 💬)
-          const icons = ['💡', '❓', '💬'];
-          const currentIcon = icons[Math.floor(Date.now() / 800) % icons.length];
-          
-          ctx.fillText(currentIcon, centerX, bubbleY - 10);
-        
+          ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 10); ctx.fill();
+          ctx.strokeStyle = '#a4b0be'; ctx.lineWidth = 2; ctx.stroke();
+          // Small tail dots
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.beginPath(); ctx.arc(centerX - 5, bubbleY + 2, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(centerX - 2, bubbleY + 6, 2, 0, Math.PI * 2); ctx.fill();
+          // Draw emote icon
+          if (emoteImg && emoteImg.complete) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(emoteImg, bx + (bw - 18) / 2, by + (bh - 18) / 2, 18, 18);
+            ctx.imageSmoothingEnabled = true;
+          }
+        } else if (p.interactionText) {
+          // Interaction bubble with item icon + text
+          const actText = p.interactionText.length > 16 ? p.interactionText.substring(0, 16) + '...' : p.interactionText;
+          ctx.font = '400 12px "Pixelify Sans", sans-serif';
+          const actWidth = ctx.measureText(actText).width;
+          const hasIcon = p.interactionIcon && itemImages[p.interactionIcon];
+          const iconSpace = hasIcon ? 20 : 0;
+          const bubblePad = 10;
+          const bubbleW = actWidth + iconSpace + bubblePad * 2;
+          const bubbleH = 28;
+          const bubbleX = centerX - bubbleW / 2;
+          const bubbleYpos = sy - 65 + floatY;
+          // Golden bubble
+          ctx.fillStyle = 'rgba(255, 248, 220, 0.97)';
+          ctx.beginPath(); ctx.roundRect(bubbleX, bubbleYpos, bubbleW, bubbleH, 8); ctx.fill();
+          ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.stroke();
+          // Tail triangle
+          ctx.fillStyle = 'rgba(255, 248, 220, 0.97)';
+          ctx.beginPath();
+          ctx.moveTo(centerX - 4, bubbleYpos + bubbleH);
+          ctx.lineTo(centerX + 4, bubbleYpos + bubbleH);
+          ctx.lineTo(centerX, bubbleYpos + bubbleH + 6);
+          ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5; ctx.stroke();
+          // Item icon
+          let textStartX = bubbleX + bubblePad;
+          if (hasIcon) {
+            const iImg = itemImages[p.interactionIcon];
+            if (iImg.complete) {
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(iImg, bubbleX + bubblePad, bubbleYpos + (bubbleH - 16) / 2, 16, 16);
+              ctx.imageSmoothingEnabled = true;
+            }
+            textStartX += iconSpace;
+          }
+          // Action text
+          ctx.font = '400 12px "Pixelify Sans", sans-serif';
+          ctx.fillStyle = '#8B5E14'; ctx.textAlign = 'left';
+          ctx.fillText(actText, textStartX, bubbleYpos + bubbleH / 2 + 1);
+          ctx.textAlign = 'center'; // reset
         } else if (p.message) {
-          // 如果不在思考且有消息，画聊天气泡
-          // Chat bubble with auto-sizing
           const msgText = p.message.length > 30 ? p.message.substring(0, 30) + '...' : p.message;
           ctx.font = '400 14px "Pixelify Sans", sans-serif';
           const msgWidth = ctx.measureText(msgText).width;
@@ -304,7 +794,6 @@
           const bubbleH = 30;
           const bubbleX = centerX - bubbleW / 2;
           const bubbleYpos = sy - 65 + floatY;
-
           ctx.fillStyle = 'white'; ctx.beginPath(); ctx.roundRect(bubbleX, bubbleYpos, bubbleW, bubbleH, 8); ctx.fill();
           ctx.strokeStyle = '#8ecf7e'; ctx.lineWidth = 2; ctx.stroke();
           ctx.fillStyle = '#5c4a3d'; ctx.textAlign = 'center';
@@ -312,7 +801,7 @@
         }
       });
 
-      // 3. 遮挡层
+      // 3. Top (occlusion) layers
       const topLayers = ["Nature", "Building", "BuildingTop"];
       mapData.layers.forEach(layer => {
         if (layer.type === 'tilelayer' && topLayers.includes(layer.name) && layer.visible) {
@@ -322,51 +811,192 @@
         }
       });
 
-      // 4. 🖱️ 鼠标悬停显示语义区 (完整版！)
+      // 4. Flags and top decorations (above buildings)
+      drawAnimDecors('top');
+
+      // 5. Leaf and firefly particles (above everything)
+      drawParticlesOfType('leaf');
+      drawParticlesOfType('firefly');
+
+      // 5. Day/night overlay
+      const overlay = getDayNightOverlay();
+      if (overlay.a > 0) {
+        ctx.fillStyle = `rgba(${overlay.r}, ${overlay.g}, ${overlay.b}, ${overlay.a})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // 6. Mouse hover zone tooltip
       const zoneLayer = mapData.layers.find(l => l.name === 'SemanticZones' || l.type === 'objectgroup');
       if (zoneLayer && zoneLayer.objects) {
         zoneLayer.objects.forEach(zone => {
           const scaleX = TILE_SIZE / mapData.tilewidth, scaleY = TILE_SIZE / mapData.tileheight;
-          const rx = zone.x * scaleX, ry = zone.y * scaleY, rw = zone.width * scaleX, rh = zone.height * scaleY;
-
-          // 检测鼠标碰撞
+          const rx = zone.x * scaleX, ry = zone.y * scaleY;
+          const rw = zone.width * scaleX, rh = zone.height * scaleY;
           if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
-            // 1. 设置好字体，以便测量
             ctx.font = 'bold 16px "Pixelify Sans", sans-serif';
-            ctx.textAlign = 'center'; 
-            ctx.textBaseline = 'middle';
-            
-            // 2. 测量文字宽度
-            const labelText = `📍 ${zone.name}`;
-            const textMetrics = ctx.measureText(labelText);
-            const textWidth = textMetrics.width;
-            
-            // 3. 计算矩形尺寸 (文字宽度 + 左右各 15px 的内边距)
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            const labelText = zone.name;
+            const textWidth = ctx.measureText(labelText).width;
             const padding = 20;
             const rectW = textWidth + padding;
             const rectH = 35;
-            
-            // 4. 绘制自适应白板
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
-            ctx.beginPath();
-            // 让白板中心稍微偏移鼠标，避免遮挡鼠标指针
             const rectX = mouseX - 15;
             const rectY = mouseY - 30;
-            ctx.roundRect(rectX, rectY, rectW, rectH, 8); 
-            ctx.fill();
-            
-            // 5. 绘制橙色边框
-            ctx.strokeStyle = '#f39c12'; 
-            ctx.lineWidth = 2; 
-            ctx.stroke();
-            
-            // 6. 绘制文字 (现在文字被精准地居中在自适应白板里了)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+            ctx.beginPath(); ctx.roundRect(rectX, rectY, rectW, rectH, 8); ctx.fill();
+            ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 2; ctx.stroke();
             ctx.fillStyle = '#5c4a3d';
             ctx.fillText(labelText, rectX + rectW / 2, rectY + rectH / 2);
           }
         });
       }
-    } // <- draw() 函数在这里闭合
+    }
+
+    function drawParticlesOfType(type) {
+      for (const p of particles) {
+        if (p.type !== type) continue;
+        const fadeRatio = Math.min(1, p.life / (p.maxLife * 0.3));
+        if (p.type === 'firefly') {
+          const glow = 0.4 + 0.6 * Math.sin(Date.now() / 200 + p.phase);
+          const alpha = fadeRatio * glow;
+          // Glow ring
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 4, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200, 255, 100, ${alpha * 0.15})`; ctx.fill();
+          // Try spark sprite, fallback to circle
+          const sparkImg = particleSprites['Spark'];
+          if (sparkImg && sparkImg.complete) {
+            const fw = sparkImg.width / 9; // ~9 spark variants in strip
+            const frame = Math.floor(Date.now() / 200 + p.phase) % Math.max(1, Math.floor(sparkImg.width / 8));
+            ctx.save(); ctx.globalAlpha = alpha * 0.9; ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sparkImg, frame * fw, 0, fw, sparkImg.height, p.x - p.size * 1.5, p.y - p.size * 1.5, p.size * 3, p.size * 3);
+            ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = true; ctx.restore();
+          } else {
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(240, 255, 150, ${alpha * 0.9})`; ctx.fill();
+          }
+        } else if (p.type === 'leaf') {
+          // Use sprite-based leaf
+          const leafType = (p.x + p.y) % 2 === 0 ? 'Leaf' : 'LeafPink';
+          const leafImg = particleSprites[leafType];
+          if (leafImg && leafImg.complete) {
+            const fw = leafImg.height; // each leaf is roughly square
+            const numFrames = Math.max(1, Math.floor(leafImg.width / fw));
+            const frame = Math.floor(p.rot * 2) % numFrames;
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot * 0.3);
+            ctx.globalAlpha = fadeRatio * 0.8; ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(leafImg, Math.abs(frame) * fw, 0, fw, leafImg.height, -p.size * 1.5, -p.size * 1.5, p.size * 3, p.size * 3);
+            ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = true; ctx.restore();
+          } else {
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+            ctx.globalAlpha = fadeRatio * 0.7; ctx.fillStyle = '#6ab04c';
+            ctx.fillRect(-p.size, -p.size / 2, p.size * 2, p.size);
+            ctx.globalAlpha = 1; ctx.restore();
+          }
+        } else if (p.type === 'shimmer') {
+          const alpha = fadeRatio * (0.3 + 0.3 * Math.sin(Date.now() / 150 + p.x));
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200, 230, 255, ${alpha})`; ctx.fill();
+        }
+      }
+    }
+
+    // === drawMinimap() ===
+    function drawMinimap() {
+      if (!mapData) return;
+      const mw = miniCanvas.width;
+      const mh = miniCanvas.height;
+      const mapW = mapData.width * TILE_SIZE;
+      const mapH = mapData.height * TILE_SIZE;
+      const scale = Math.min(mw / mapW, mh / mapH);
+
+      miniCtx.clearRect(0, 0, mw, mh);
+
+      // Background
+      miniCtx.fillStyle = '#2d3436';
+      miniCtx.fillRect(0, 0, mw, mh);
+
+      // Draw zone areas
+      const zoneLayer = mapData.layers.find(l => l.name === 'SemanticZones' || l.type === 'objectgroup');
+      if (zoneLayer && zoneLayer.objects) {
+        const tileScale = TILE_SIZE / mapData.tilewidth;
+        zoneLayer.objects.forEach(zone => {
+          const name = (zone.name || '').toLowerCase();
+          if (name.includes('paved') || name.includes('road')) return; // skip roads
+          const zx = zone.x * tileScale * scale;
+          const zy = zone.y * tileScale * scale;
+          const zw = Math.max((zone.width || 20) * tileScale * scale, 4);
+          const zh = Math.max((zone.height || 20) * tileScale * scale, 4);
+
+          // Color by type
+          if (name.includes('pond') || name.includes('water')) miniCtx.fillStyle = 'rgba(116, 185, 255, 0.4)';
+          else if (name.includes('tree') || name.includes('grass')) miniCtx.fillStyle = 'rgba(106, 176, 76, 0.4)';
+          else miniCtx.fillStyle = 'rgba(253, 203, 110, 0.3)';
+          miniCtx.fillRect(zx, zy, zw, zh);
+
+          // Label for buildings
+          if (!name.includes('tree') && !name.includes('paved') && !name.includes('grass')) {
+            miniCtx.font = '7px "Pixelify Sans", sans-serif';
+            miniCtx.fillStyle = 'rgba(255,255,255,0.7)';
+            miniCtx.textAlign = 'center'; miniCtx.textBaseline = 'middle';
+            // Use short name
+            const shortName = zone.name.split('(')[0].trim().substring(0, 6);
+            miniCtx.fillText(shortName, zx + zw / 2, zy + zh / 2);
+          }
+        });
+      }
+
+      // Draw player dots
+      for (const id in clientPlayers) {
+        const p = clientPlayers[id];
+        const px = p.displayX * scale + 2;
+        const py = p.displayY * scale + 2;
+        // Dot
+        miniCtx.beginPath();
+        miniCtx.arc(px, py, 3, 0, Math.PI * 2);
+        miniCtx.fillStyle = p.name === 'Observer' ? '#f1c40f' : '#e74c3c';
+        miniCtx.fill();
+        // Name
+        miniCtx.font = 'bold 8px "Pixelify Sans", sans-serif';
+        miniCtx.fillStyle = '#fff';
+        miniCtx.textAlign = 'center';
+        miniCtx.fillText(p.name, px, py - 6);
+      }
+    }
+
+    // === Chat log functions ===
+    function addChatMessage(name, message, timestamp) {
+      chatMessages.push({ type: 'chat', name, message, time: timestamp || Date.now() });
+      if (chatMessages.length > MAX_DISPLAY_MESSAGES) chatMessages.shift();
+      renderChatEntry({ type: 'chat', name, message, time: timestamp || Date.now() });
+    }
+
+    function addInteractionMessage(entry) {
+      chatMessages.push({ type: 'interaction', ...entry });
+      if (chatMessages.length > MAX_DISPLAY_MESSAGES) chatMessages.shift();
+      renderChatEntry({ type: 'interaction', ...entry });
+    }
+
+    function renderChatEntry(entry) {
+      const div = document.createElement('div');
+      div.className = 'chat-entry';
+      const timeStr = new Date(entry.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (entry.type === 'chat') {
+        div.innerHTML = `<span class="chat-time">${timeStr}</span> <span class="chat-name">${escapeHtml(entry.name)}</span>: ${escapeHtml(entry.message)}`;
+      } else {
+        div.className = 'chat-entry interaction-entry';
+        div.innerHTML = `<span class="chat-time">${timeStr}</span> ${escapeHtml(entry.name)} @ ${escapeHtml(entry.zone || '')}: ${escapeHtml(entry.action || '')}`;
+      }
+      chatlogEl.appendChild(div);
+      chatlogEl.scrollTop = chatlogEl.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
+    // Boot
     initialize();
   </script>
 </body>
