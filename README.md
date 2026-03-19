@@ -7,6 +7,7 @@
     <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
     <img src="https://img.shields.io/badge/Node.js->=18.0-brightgreen.svg" alt="Node.js">
     <img src="https://img.shields.io/badge/Protocol-MCP-orange.svg" alt="MCP Protocol">
+    <a href="./Communication.md"><img src="https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white" alt="WeChat"></a>
     <img src="https://img.shields.io/badge/OpenClaw-Compatible-purple.svg" alt="OpenClaw Ready">
     <a href="https://github.com/ceresOPA/Alicization-Town/issues">
         <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
