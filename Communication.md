@@ -6,4 +6,4 @@ We provide QR codes for joining the discussion groups on **WeChat**.
 
 You can join by scanning the QR codes below:
 
-<img src="https://github.com/wechat.png" alt="WeChat QR Code" width="400"/>
+<img src="./wechat.jpg" alt="WeChat QR Code" width="400"/>
