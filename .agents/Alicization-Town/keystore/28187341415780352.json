@@ -1,0 +1,11 @@
+{
+  "id": "28187341415780352",
+  "publicKey": "ucFrWqID14Vm6U9SVZvgwmu3pRqmq9zQbiaAL5PzYjM",
+  "deviceId": "9efacaf8-82e6-441d-a33b-458a0e70cea2",
+  "jwk": {
+    "crv": "Ed25519",
+    "d": "Kt0-mc1RQQd32gcOAbek4A2szgW8dDA3Yeq_j7zKvno",
+    "x": "ucFrWqID14Vm6U9SVZvgwmu3pRqmq9zQbiaAL5PzYjM",
+    "kty": "OKP"
+  }
+}

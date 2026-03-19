@@ -1,3 +1,9 @@
 node_modules
 .claude
+.agent/
+.brainstorm/
 npm
+
+# Local evaluation outputs
+eval/town/reports/
+packages/town-cli/dist/

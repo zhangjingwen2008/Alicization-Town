@@ -1,0 +1,925 @@
+#!/usr/bin/env node
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+
+// shared/town-client/config.js
+var require_config = __commonJS({
+  "shared/town-client/config.js"(exports2, module2) {
+    var os = require("os");
+    var path = require("path");
+    var PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+    var PROJECT_NAME = path.basename(PROJECT_ROOT);
+    var TOKEN_TTL_MS = 24 * 60 * 60 * 1e3;
+    var LEASE_TTL_MS = Number(process.env.ALICIZATION_TOWN_LEASE_TTL_MS || 18e4);
+    var HEARTBEAT_INTERVAL_MS = Number(process.env.ALICIZATION_TOWN_HEARTBEAT_INTERVAL_MS || 6e4);
+    var LOGIN_PROOF_TTL_MS = 6e4;
+    var LOCAL_CANDIDATES = ["http://127.0.0.1:5660", "http://localhost:5660"];
+    function resolveStorageRoot(options = {}) {
+      const env = options.env || process.env;
+      const home = options.homedir || os.homedir();
+      const projectName = options.projectName || PROJECT_NAME;
+      if (env.ALICIZATION_TOWN_HOME) {
+        return path.resolve(env.ALICIZATION_TOWN_HOME);
+      }
+      return path.join(home, ".agents", projectName);
+    }
+    var STORAGE_ROOT = resolveStorageRoot();
+    var PROFILES_DIR = path.join(STORAGE_ROOT, "profiles");
+    var KEYSTORE_DIR = path.join(STORAGE_ROOT, "keystore");
+    var DEFAULT_PROFILE_FILE = path.join(PROFILES_DIR, "default.json");
+    module2.exports = {
+      resolveStorageRoot,
+      PROJECT_ROOT,
+      PROJECT_NAME,
+      TOKEN_TTL_MS,
+      LEASE_TTL_MS,
+      HEARTBEAT_INTERVAL_MS,
+      LOGIN_PROOF_TTL_MS,
+      LOCAL_CANDIDATES,
+      STORAGE_ROOT,
+      PROFILES_DIR,
+      KEYSTORE_DIR,
+      DEFAULT_PROFILE_FILE
+    };
+  }
+});
+
+// shared/town-client/storage.js
+var require_storage = __commonJS({
+  "shared/town-client/storage.js"(exports2, module2) {
+    var fs = require("fs");
+    var path = require("path");
+    var {
+      PROFILES_DIR,
+      KEYSTORE_DIR,
+      DEFAULT_PROFILE_FILE
+    } = require_config();
+    function ensureDir(dirPath) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    function readJson(filePath, fallback) {
+      try {
+        return JSON.parse(fs.readFileSync(filePath, "utf8"));
+      } catch {
+        return fallback;
+      }
+    }
+    function writeJson(filePath, data, mode = 384) {
+      ensureDir(path.dirname(filePath));
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      try {
+        fs.chmodSync(filePath, mode);
+      } catch {
+      }
+    }
+    function profilePath(profileName) {
+      return path.join(PROFILES_DIR, `${profileName}.json`);
+    }
+    function keystorePath(handle) {
+      return path.join(KEYSTORE_DIR, `${handle}.json`);
+    }
+    function getDefaultProfileName() {
+      return readJson(DEFAULT_PROFILE_FILE, {}).profile || null;
+    }
+    function setDefaultProfileName(profile) {
+      writeJson(DEFAULT_PROFILE_FILE, { profile });
+    }
+    function loadProfile(profileName) {
+      return readJson(profilePath(profileName), null);
+    }
+    function saveProfile(profile) {
+      writeJson(profilePath(profile.profile), profile);
+    }
+    function loadKeystore(handle) {
+      return readJson(keystorePath(handle), null);
+    }
+    function saveKeystore(handle, keystore) {
+      writeJson(keystorePath(handle), keystore);
+    }
+    function listProfileNames() {
+      ensureDir(PROFILES_DIR);
+      return fs.readdirSync(PROFILES_DIR).filter((entry) => entry.endsWith(".json") && entry !== "default.json").map((entry) => path.basename(entry, ".json"));
+    }
+    function listProfiles() {
+      ensureDir(PROFILES_DIR);
+      const defaultProfile = getDefaultProfileName();
+      const items = fs.readdirSync(PROFILES_DIR).filter((entry) => entry.endsWith(".json") && entry !== "default.json").map((entry) => readJson(path.join(PROFILES_DIR, entry), null)).filter(Boolean).map((profile) => ({
+        profile: profile.profile,
+        handle: profile.handle,
+        name: profile.name,
+        sprite: profile.sprite,
+        is_default: profile.profile === defaultProfile,
+        is_ready: Boolean(profile.server && profile.handle && loadKeystore(profile.handle)),
+        last_used_at: profile.lastUsedAt || null
+      })).sort((left, right) => {
+        const leftTime = left.last_used_at ? Date.parse(left.last_used_at) : 0;
+        const rightTime = right.last_used_at ? Date.parse(right.last_used_at) : 0;
+        if (rightTime !== leftTime) return rightTime - leftTime;
+        return left.profile.localeCompare(right.profile);
+      });
+      if (items.length === 0) {
+        return {
+          status: "empty",
+          items: [],
+          default_profile: null,
+          message: "\u672C\u5730\u8FD8\u6CA1\u6709 profile\uFF0C\u8BF7\u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u521B\u5EFA\u89D2\u8272\u3002"
+        };
+      }
+      return {
+        status: "ok",
+        items,
+        default_profile: defaultProfile,
+        message: `\u5DF2\u627E\u5230 ${items.length} \u4E2A\u672C\u5730 profile\u3002`
+      };
+    }
+    module2.exports = {
+      ensureDir,
+      readJson,
+      writeJson,
+      profilePath,
+      keystorePath,
+      getDefaultProfileName,
+      setDefaultProfileName,
+      loadProfile,
+      saveProfile,
+      loadKeystore,
+      saveKeystore,
+      listProfileNames,
+      listProfiles
+    };
+  }
+});
+
+// shared/town-client/http-client.js
+var require_http_client = __commonJS({
+  "shared/town-client/http-client.js"(exports2, module2) {
+    var http = require("http");
+    var https = require("https");
+    var { LOCAL_CANDIDATES } = require_config();
+    function requestJson(baseUrl, method, apiPath, { body, headers } = {}) {
+      return new Promise((resolve, reject) => {
+        const url = new URL(apiPath, baseUrl);
+        const isHttps = url.protocol === "https:";
+        const options = {
+          hostname: url.hostname,
+          port: url.port || (isHttps ? 443 : 80),
+          path: `${url.pathname}${url.search}`,
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            ...headers || {}
+          },
+          timeout: 1e4
+        };
+        const req = (isHttps ? https : http).request(options, (res) => {
+          let data = "";
+          res.on("data", (chunk) => {
+            data += chunk;
+          });
+          res.on("end", () => {
+            let parsed = {};
+            if (data) {
+              try {
+                parsed = JSON.parse(data);
+              } catch {
+                reject(new Error(`\u65E0\u6CD5\u89E3\u6790\u54CD\u5E94: ${data}`));
+                return;
+              }
+            }
+            if (res.statusCode >= 400) {
+              const message = parsed && parsed.error ? parsed.error : `HTTP ${res.statusCode}`;
+              const error = new Error(message);
+              error.statusCode = res.statusCode;
+              error.payload = parsed;
+              reject(error);
+              return;
+            }
+            resolve(parsed);
+          });
+        });
+        req.on("error", (error) => reject(new Error(`\u8FDE\u63A5\u5931\u8D25: ${error.message}`)));
+        req.on("timeout", () => {
+          req.destroy();
+          reject(new Error("\u8FDE\u63A5\u8D85\u65F6"));
+        });
+        if (body) {
+          req.write(JSON.stringify(body));
+        }
+        req.end();
+      });
+    }
+    async function probeServer(baseUrl) {
+      await requestJson(baseUrl, "GET", "/api/characters");
+      return baseUrl;
+    }
+    async function discoverServer(explicitServer) {
+      const seen = /* @__PURE__ */ new Set();
+      const candidates = [
+        explicitServer || null,
+        process.env.SERVER_URL || null,
+        ...LOCAL_CANDIDATES
+      ].filter(Boolean);
+      for (const candidate of candidates) {
+        if (seen.has(candidate)) continue;
+        seen.add(candidate);
+        try {
+          await probeServer(candidate);
+          return candidate;
+        } catch {
+        }
+      }
+      throw new Error("\u672A\u627E\u5230\u53EF\u7528\u670D\u52A1\u5668\u3002\u8BF7\u5148\u542F\u52A8\u4E16\u754C\u670D\u52A1\uFF0C\u6216\u901A\u8FC7 SERVER_URL \u6307\u5B9A\u5730\u5740\u3002");
+    }
+    module2.exports = {
+      requestJson,
+      discoverServer
+    };
+  }
+});
+
+// shared/town-client/auth-client.js
+var require_auth_client = __commonJS({
+  "shared/town-client/auth-client.js"(exports2, module2) {
+    var crypto = require("crypto");
+    var { TOKEN_TTL_MS } = require_config();
+    var {
+      saveProfile,
+      loadKeystore,
+      saveKeystore,
+      setDefaultProfileName,
+      listProfileNames
+    } = require_storage();
+    var { discoverServer, requestJson } = require_http_client();
+    function base64Url(buffer) {
+      return buffer.toString("base64url");
+    }
+    function buildLoginMessage(handle, timestamp) {
+      return Buffer.from(`alicization-town:login:${handle}:${timestamp}`, "utf8");
+    }
+    function generateKeyMaterial() {
+      const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+      const publicJwk = publicKey.export({ format: "jwk" });
+      const privateJwk = privateKey.export({ format: "jwk" });
+      return {
+        deviceId: crypto.randomUUID(),
+        publicKey: publicJwk.x,
+        jwk: privateJwk
+      };
+    }
+    function signLoginProof(handle, timestamp, jwk) {
+      const key = crypto.createPrivateKey({ key: jwk, format: "jwk" });
+      return base64Url(crypto.sign(null, buildLoginMessage(handle, timestamp), key));
+    }
+    function normalizeProfileName(input) {
+      return String(input || "").trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+    }
+    function deriveProfileName({ profile, name, handle }) {
+      const base = normalizeProfileName(profile || name || handle || "profile") || "profile";
+      const existing = new Set(listProfileNames());
+      if (!existing.has(base)) return base;
+      let suffix = 2;
+      while (existing.has(`${base}-${suffix}`)) suffix += 1;
+      return `${base}-${suffix}`;
+    }
+    async function createRemoteProfile(server, name, sprite, publicKey) {
+      return requestJson(server, "POST", "/api/profiles/create", {
+        body: { name, sprite, publicKey }
+      });
+    }
+    async function createProfile({ profile: preferredProfileName, name, sprite, server }) {
+      const targetServer = await discoverServer(server);
+      const keyMaterial = generateKeyMaterial();
+      const created = await createRemoteProfile(targetServer, name, sprite, keyMaterial.publicKey);
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const profileName = deriveProfileName({ profile: preferredProfileName, name: created.name || name, handle: created.handle });
+      const localProfile = {
+        profile: profileName,
+        handle: created.handle,
+        name: created.name || name,
+        sprite: created.sprite || sprite,
+        server: targetServer,
+        token: null,
+        expiresAt: null,
+        leaseExpiresAt: null,
+        lastUsedAt: now
+      };
+      saveProfile(localProfile);
+      saveKeystore(localProfile.handle, {
+        handle: localProfile.handle,
+        publicKey: keyMaterial.publicKey,
+        deviceId: keyMaterial.deviceId,
+        jwk: keyMaterial.jwk
+      });
+      setDefaultProfileName(localProfile.profile);
+      return localProfile;
+    }
+    async function loginWithProfile(profile) {
+      const keystore = loadKeystore(profile.handle);
+      if (!keystore || !keystore.jwk) {
+        return {
+          status: "reauth_required",
+          profile: profile.profile,
+          handle: profile.handle,
+          name: profile.name,
+          sprite: profile.sprite,
+          server: profile.server || null,
+          lease_expires_at: null,
+          message: "\u672C\u5730 profile \u7F3A\u5C11\u53EF\u7528\u8BA4\u8BC1\u6750\u6599\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u89D2\u8272\u3002"
+        };
+      }
+      const server = await discoverServer(profile.server);
+      const timestamp = Date.now();
+      const signature = signLoginProof(profile.handle, timestamp, keystore.jwk);
+      const response = await requestJson(server, "POST", "/api/login", {
+        body: {
+          handle: profile.handle,
+          timestamp,
+          signature,
+          deviceId: keystore.deviceId
+        }
+      });
+      const nextProfile = {
+        ...profile,
+        name: response.name || profile.name,
+        sprite: response.sprite || profile.sprite,
+        handle: response.handle || profile.handle,
+        server,
+        token: response.token,
+        expiresAt: response.expires_at || new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+        leaseExpiresAt: response.lease_expires_at || null,
+        lastUsedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      saveProfile(nextProfile);
+      setDefaultProfileName(nextProfile.profile);
+      return {
+        status: response.status,
+        profile: nextProfile.profile,
+        handle: nextProfile.handle,
+        name: nextProfile.name,
+        sprite: nextProfile.sprite,
+        server: nextProfile.server,
+        lease_expires_at: nextProfile.leaseExpiresAt,
+        message: response.message,
+        token: nextProfile.token
+      };
+    }
+    module2.exports = {
+      createProfile,
+      loginWithProfile,
+      generateKeyMaterial,
+      signLoginProof,
+      normalizeProfileName
+    };
+  }
+});
+
+// shared/town-client/session-handle.js
+var require_session_handle = __commonJS({
+  "shared/town-client/session-handle.js"(exports2, module2) {
+    var {
+      getDefaultProfileName,
+      loadProfile,
+      saveProfile
+    } = require_storage();
+    var { createProfile, loginWithProfile } = require_auth_client();
+    var { requestJson } = require_http_client();
+    function resolveProfileName(profile) {
+      return profile || getDefaultProfileName();
+    }
+    function getProfileOrThrow(profileName) {
+      const resolvedProfile = resolveProfileName(profileName);
+      if (!resolvedProfile) {
+        throw new Error("\u672C\u5730\u8FD8\u6CA1\u6709 profile\uFF0C\u8BF7\u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u521B\u5EFA\u89D2\u8272\u3002");
+      }
+      const profile = loadProfile(resolvedProfile);
+      if (!profile) {
+        throw new Error(`Profile "${resolvedProfile}" \u4E0D\u5B58\u5728\u3002`);
+      }
+      return profile;
+    }
+    var SessionHandle = class {
+      constructor(profileName = null) {
+        this.profileName = profileName || null;
+      }
+      bindProfile(profile) {
+        if (profile?.profile) this.profileName = profile.profile;
+        return profile;
+      }
+      resolveProfileName(explicitProfile) {
+        return resolveProfileName(explicitProfile || this.profileName);
+      }
+      getProfileOrThrow(explicitProfile) {
+        return this.bindProfile(getProfileOrThrow(explicitProfile || this.profileName));
+      }
+      async createProfile(options) {
+        const created = await createProfile(options);
+        return this.bindProfile(created);
+      }
+      async login(options = {}) {
+        if (options.create) {
+          const missingFields = [];
+          if (!options.name) missingFields.push("name");
+          if (!options.sprite) missingFields.push("sprite");
+          if (missingFields.length > 0) {
+            return {
+              status: "needs_creation",
+              profile: null,
+              handle: null,
+              name: null,
+              sprite: null,
+              server: null,
+              lease_expires_at: null,
+              missing_fields: missingFields,
+              message: "\u521B\u5EFA\u89D2\u8272\u524D\u8FD8\u7F3A\u5C11\u5FC5\u8981\u5B57\u6BB5\u3002"
+            };
+          }
+          const createdProfile = await this.createProfile({
+            profile: options.profile,
+            name: options.name,
+            sprite: options.sprite,
+            server: options.server
+          });
+          const createdLogin = await loginWithProfile(createdProfile);
+          this.profileName = createdProfile.profile;
+          return {
+            ...createdLogin,
+            status: createdLogin.status === "took_over_session" ? "took_over_session" : "created_and_authenticated"
+          };
+        }
+        const resolvedProfile = this.resolveProfileName(options.profile);
+        if (!resolvedProfile) {
+          return {
+            status: "needs_creation",
+            profile: null,
+            handle: null,
+            name: null,
+            sprite: null,
+            server: null,
+            lease_expires_at: null,
+            missing_fields: ["name", "sprite"],
+            message: "\u672C\u5730\u8FD8\u6CA1\u6709 profile\uFF0C\u8BF7\u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u521B\u5EFA\u89D2\u8272\u3002"
+          };
+        }
+        const profile = this.getProfileOrThrow(resolvedProfile);
+        this.profileName = resolvedProfile;
+        return loginWithProfile(profile);
+      }
+      async heartbeat() {
+        const profile = this.getProfileOrThrow();
+        if (!profile.token) {
+          return { ok: false, reason: "missing_token" };
+        }
+        try {
+          const result = await requestJson(profile.server, "POST", "/api/session/heartbeat", {
+            headers: { Authorization: `Bearer ${profile.token}` }
+          });
+          const nextProfile = {
+            ...profile,
+            leaseExpiresAt: result.lease_expires_at || profile.leaseExpiresAt,
+            expiresAt: result.expires_at || profile.expiresAt,
+            lastUsedAt: (/* @__PURE__ */ new Date()).toISOString()
+          };
+          saveProfile(nextProfile);
+          this.bindProfile(nextProfile);
+          return { ok: true, profile: nextProfile, result };
+        } catch (error) {
+          if (error.statusCode === 401) {
+            const nextProfile = { ...profile, token: null, leaseExpiresAt: null };
+            saveProfile(nextProfile);
+            this.bindProfile(nextProfile);
+            return { ok: false, reason: "unauthorized" };
+          }
+          throw error;
+        }
+      }
+      async ensureOnline() {
+        const resolvedProfile = this.resolveProfileName();
+        if (!resolvedProfile) {
+          return {
+            status: "needs_creation",
+            profile: null,
+            handle: null,
+            message: "\u672C\u5730\u8FD8\u6CA1\u6709 profile\uFF0C\u8BF7\u5148\u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u521B\u5EFA\u89D2\u8272\u3002"
+          };
+        }
+        this.profileName = resolvedProfile;
+        const heartbeatResult = await this.heartbeat();
+        if (heartbeatResult.ok) {
+          return { profile: heartbeatResult.profile, login: null };
+        }
+        const loginResult = await this.login({ profile: resolvedProfile });
+        if (loginResult.status === "needs_creation" || loginResult.status === "reauth_required") {
+          return { profile: null, login: loginResult };
+        }
+        return {
+          profile: this.getProfileOrThrow(resolvedProfile),
+          login: loginResult
+        };
+      }
+      async request(method, apiPath, body) {
+        const ensured = await this.ensureOnline();
+        if (!ensured.profile) {
+          return { auth: ensured.login, result: null };
+        }
+        const result = await requestWithProfile(ensured.profile, method, apiPath, body);
+        return { auth: ensured.login, result, profile: this.bindProfile(ensured.profile) };
+      }
+      async logout() {
+        const resolvedProfile = this.resolveProfileName();
+        if (!resolvedProfile) return { ok: false };
+        const profile = loadProfile(resolvedProfile);
+        if (!profile || !profile.token) return { ok: false };
+        try {
+          await requestJson(profile.server, "POST", "/api/logout", {
+            headers: { Authorization: `Bearer ${profile.token}` }
+          });
+        } catch {
+        }
+        const nextProfile = {
+          ...profile,
+          token: null,
+          leaseExpiresAt: null
+        };
+        saveProfile(nextProfile);
+        this.bindProfile(nextProfile);
+        return { ok: true };
+      }
+    };
+    async function requestWithProfile(profile, method, apiPath, body) {
+      return requestJson(profile.server, method, apiPath, {
+        body,
+        headers: profile.token ? { Authorization: `Bearer ${profile.token}` } : void 0
+      });
+    }
+    async function runAuthenticated(method, apiPath, body, profileName) {
+      return new SessionHandle(profileName).request(method, apiPath, body);
+    }
+    async function logoutProfile(profileName) {
+      return new SessionHandle(profileName).logout();
+    }
+    async function heartbeat(profileName) {
+      return new SessionHandle(profileName).heartbeat();
+    }
+    async function ensureOnline(profileName) {
+      return new SessionHandle(profileName).ensureOnline();
+    }
+    async function login(options = {}) {
+      return new SessionHandle(options.profile || null).login(options);
+    }
+    module2.exports = {
+      SessionHandle,
+      resolveProfileName,
+      getProfileOrThrow,
+      requestWithProfile,
+      runAuthenticated,
+      logoutProfile,
+      heartbeat,
+      ensureOnline,
+      login
+    };
+  }
+});
+
+// shared/town-client/formatters.js
+var require_formatters = __commonJS({
+  "shared/town-client/formatters.js"(exports2, module2) {
+    function stringifyResult(value) {
+      return JSON.stringify(value, null, 2);
+    }
+    function formatProfilesList(payload) {
+      return stringifyResult(payload);
+    }
+    function formatLogin(payload) {
+      const { token, ...visible } = payload;
+      return stringifyResult(visible);
+    }
+    function formatCharacters(characters) {
+      if (!characters || characters.length === 0) {
+        return "\u6682\u65F6\u6CA1\u6709\u6536\u5230\u89D2\u8272\u5217\u8868\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5\u3002";
+      }
+      let info = "\u{1F3AD} \u3010\u53EF\u9009\u89D2\u8272\u3011\n";
+      characters.forEach((item, index) => {
+        info += `${index + 1}. ${item}
+`;
+      });
+      info += "\n\u{1F4A1} \u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u9009\u62E9\u89D2\u8272\u5E76\u52A0\u5165\u5C0F\u9547\u3002";
+      return info;
+    }
+    function formatMap(directory) {
+      if (!directory || directory.length === 0) {
+        return "\u5C0F\u9547\u76EE\u524D\u6CA1\u6709\u4EFB\u4F55\u6807\u8BB0\u7684\u7279\u6B8A\u533A\u57DF\u3002";
+      }
+      let info = "\u{1F4DC} \u3010\u65C5\u6E38\u6307\u5357\u3011\u4EE5\u4E0B\u662F\u5C0F\u9547\u4E2D\u6240\u6709\u91CD\u8981\u5730\u70B9\u53CA\u5176\u4E2D\u5FC3\u5750\u6807\uFF1A\n\n";
+      directory.forEach((place) => {
+        info += `\u{1F539} [${place.name}] -> \u5750\u6807: (${place.x}, ${place.y})
+   \u8BF4\u660E: ${place.description}
+`;
+      });
+      info += "\n\u{1F4A1} \u63D0\u793A: \u4F7F\u7528 walk \u5DE5\u5177\u524D\u5F80\u4F60\u60F3\u53BB\u7684\u5730\u65B9\u3002";
+      return info;
+    }
+    function formatLook(result) {
+      const { player, nearby = [] } = result;
+      let info = `\u{1F4CD} \u3010\u4F4D\u7F6E\u611F\u77E5\u3011
+\u4F60\u5F53\u524D\u5750\u6807: (${player.x}, ${player.y})
+`;
+      if (player.zone === "\u5C0F\u9547\u8857\u9053") {
+        info += "\u4F60\u76EE\u524D\u8EAB\u5904: \u3010\u5C0F\u9547\u8857\u9053\u3011\n\u73AF\u5883\u63CF\u8FF0: \u7A7A\u65F7\u7684\u8857\u9053\n\n";
+      } else {
+        info += `\u4F60\u76EE\u524D\u4F4D\u4E8E\u6216\u4E34\u8FD1: \u3010${player.zone}\u3011
+\u73AF\u5883\u63CF\u8FF0: ${player.zoneDesc}
+
+`;
+      }
+      if (nearby.length === 0) {
+        info += "\u56DB\u5468\u7A7A\u65E0\u4E00\u4EBA\u3002";
+        return info;
+      }
+      info += "\u{1F465} \u3010\u9644\u8FD1\u7684\u4EBA\u3011\n";
+      nearby.forEach((person) => {
+        info += `- ${person.name} \u8DDD\u79BB\u4F60 ${person.distance} \u6B65 (\u4F4D\u4E8E ${person.zone})`;
+        if (person.message) info += `\uFF0C\u4ED6\u6B63\u5728\u8BF4: "${person.message}"`;
+        info += "\n";
+      });
+      return info.trimEnd();
+    }
+    function formatWalk(direction, steps) {
+      return `\u4F60\u8BD5\u56FE\u5411 ${direction} \u8D70 ${steps} \u6B65\u3002\u8BF7\u7528 look \u786E\u8BA4\u662F\u5426\u5230\u8FBE\uFF0C\u6216\u662F\u5426\u649E\u5899\u3002`;
+    }
+    function formatSay(text) {
+      return `\u4F60\u8BF4: ${text}`;
+    }
+    function formatInteract(result) {
+      return `\u{1F3AD} \u3010\u4E92\u52A8\u3011
+\u{1F4CD} \u5730\u70B9: ${result.zone}
+\u{1F3AC} \u884C\u52A8: ${result.action}
+
+\u{1F4D6} ${result.result}`;
+    }
+    function parseFlags(args2) {
+      const result = { _: [] };
+      for (let index = 0; index < args2.length; index += 1) {
+        const current = args2[index];
+        if (!current.startsWith("--")) {
+          result._.push(current);
+          continue;
+        }
+        const key = current.slice(2);
+        const next = args2[index + 1];
+        if (next && !next.startsWith("--")) {
+          result[key] = next;
+          index += 1;
+        } else {
+          result[key] = true;
+        }
+      }
+      return result;
+    }
+    module2.exports = {
+      stringifyResult,
+      formatProfilesList,
+      formatLogin,
+      formatCharacters,
+      formatMap,
+      formatLook,
+      formatWalk,
+      formatSay,
+      formatInteract,
+      parseFlags
+    };
+  }
+});
+
+// shared/town-client/index.js
+var require_town_client = __commonJS({
+  "shared/town-client/index.js"(exports2, module2) {
+    var {
+      TOKEN_TTL_MS,
+      LEASE_TTL_MS,
+      HEARTBEAT_INTERVAL_MS,
+      LOGIN_PROOF_TTL_MS,
+      STORAGE_ROOT
+    } = require_config();
+    var {
+      listProfiles,
+      loadProfile,
+      saveProfile,
+      getDefaultProfileName,
+      setDefaultProfileName
+    } = require_storage();
+    var { requestJson, discoverServer } = require_http_client();
+    var {
+      SessionHandle,
+      login,
+      heartbeat,
+      ensureOnline,
+      runAuthenticated,
+      logoutProfile
+    } = require_session_handle();
+    var {
+      stringifyResult,
+      formatProfilesList,
+      formatLogin,
+      formatCharacters,
+      formatMap,
+      formatLook,
+      formatWalk,
+      formatSay,
+      formatInteract,
+      parseFlags
+    } = require_formatters();
+    module2.exports = {
+      SessionHandle,
+      TOKEN_TTL_MS,
+      LEASE_TTL_MS,
+      HEARTBEAT_INTERVAL_MS,
+      LOGIN_PROOF_TTL_MS,
+      STORAGE_ROOT,
+      listProfiles,
+      loadProfile,
+      saveProfile,
+      getDefaultProfileName,
+      setDefaultProfileName,
+      discoverServer,
+      login,
+      heartbeat,
+      ensureOnline,
+      runAuthenticated,
+      logoutProfile,
+      requestJson,
+      stringifyResult,
+      formatProfilesList,
+      formatLogin,
+      formatCharacters,
+      formatMap,
+      formatLook,
+      formatWalk,
+      formatSay,
+      formatInteract,
+      parseFlags
+    };
+  }
+});
+
+// packages/town-cli/src/lib/core.js
+var require_core = __commonJS({
+  "packages/town-cli/src/lib/core.js"(exports2, module2) {
+    var townClient = require_town_client();
+    module2.exports = townClient;
+  }
+});
+
+// packages/town-cli/src/lib/auth.js
+var require_auth = __commonJS({
+  "packages/town-cli/src/lib/auth.js"(exports2, module2) {
+    var { login, listProfiles, formatLogin, formatProfilesList, parseFlags } = require_core();
+    async function loginCommand(args2) {
+      const flags = parseFlags(args2);
+      const result = await login({
+        profile: flags.profile,
+        create: Boolean(flags.create),
+        name: flags.name,
+        sprite: flags.sprite
+      });
+      console.log(formatLogin(result));
+    }
+    function listProfileCommand() {
+      console.log(formatProfilesList(listProfiles()));
+    }
+    module2.exports = {
+      login: loginCommand,
+      listProfile: listProfileCommand
+    };
+  }
+});
+
+// packages/town-cli/src/lib/character.js
+var require_character = __commonJS({
+  "packages/town-cli/src/lib/character.js"(exports2, module2) {
+    var { discoverServer, requestJson, formatCharacters } = require_core();
+    async function characters() {
+      const server = await discoverServer();
+      const result = await requestJson(server, "GET", "/api/characters");
+      console.log(formatCharacters(result.characters));
+    }
+    module2.exports = { characters };
+  }
+});
+
+// packages/town-cli/src/lib/explore.js
+var require_explore = __commonJS({
+  "packages/town-cli/src/lib/explore.js"(exports2, module2) {
+    var { runAuthenticated, formatLook, formatMap } = require_core();
+    function throwForAuth(auth) {
+      if (!auth) return;
+      throw new Error(auth.message || "\u5F53\u524D\u65E0\u6CD5\u6267\u884C\u8BE5\u64CD\u4F5C\uFF0C\u8BF7\u5148 login\u3002");
+    }
+    async function look() {
+      const { auth, result } = await runAuthenticated("GET", "/api/look");
+      if (!result) throwForAuth(auth);
+      console.log(formatLook(result));
+    }
+    async function map() {
+      const { auth, result } = await runAuthenticated("GET", "/api/map");
+      if (!result) throwForAuth(auth);
+      console.log(formatMap(result.directory));
+    }
+    module2.exports = { look, map };
+  }
+});
+
+// packages/town-cli/src/lib/act.js
+var require_act = __commonJS({
+  "packages/town-cli/src/lib/act.js"(exports2, module2) {
+    var { runAuthenticated, formatWalk, formatSay, formatInteract, parseFlags } = require_core();
+    function throwForAuth(auth) {
+      if (!auth) return;
+      throw new Error(auth.message || "\u5F53\u524D\u65E0\u6CD5\u6267\u884C\u8BE5\u64CD\u4F5C\uFF0C\u8BF7\u5148 login\u3002");
+    }
+    async function walk(args2) {
+      const flags = parseFlags(args2);
+      const direction = flags.direction || flags._[0];
+      const rawSteps = flags.steps || flags._[1];
+      const steps = Number(rawSteps);
+      if (!direction || !Number.isFinite(steps)) {
+        throw new Error("\u7528\u6CD5: town walk --direction <N|S|W|E> --steps <\u6B65\u6570>");
+      }
+      const { auth, result } = await runAuthenticated("POST", "/api/walk", { direction, steps });
+      if (!result) throwForAuth(auth);
+      console.log(formatWalk(direction, steps));
+    }
+    async function say(args2) {
+      const flags = parseFlags(args2);
+      const text = flags.text || flags._.join(" ");
+      if (!text) {
+        throw new Error("\u7528\u6CD5: town say --text <\u6D88\u606F\u5185\u5BB9>");
+      }
+      const { auth, result } = await runAuthenticated("POST", "/api/say", { text });
+      if (!result) throwForAuth(auth);
+      console.log(formatSay(text));
+    }
+    async function interact() {
+      const { auth, result } = await runAuthenticated("POST", "/api/interact");
+      if (!result) throwForAuth(auth);
+      console.log(formatInteract(result));
+    }
+    module2.exports = { walk, say, interact };
+  }
+});
+
+// packages/town-cli/src/town.js
+var command = process.argv[2];
+var args = process.argv.slice(3);
+async function main() {
+  switch (command) {
+    case "login":
+      await require_auth().login(args);
+      break;
+    case "list-profile":
+      require_auth().listProfile();
+      break;
+    case "characters":
+      await require_character().characters(args);
+      break;
+    case "look":
+      await require_explore().look(args);
+      break;
+    case "map":
+      await require_explore().map(args);
+      break;
+    case "walk":
+      await require_act().walk(args);
+      break;
+    case "say":
+      await require_act().say(args);
+      break;
+    case "interact":
+      await require_act().interact(args);
+      break;
+    default:
+      console.log(`\u2694\uFE0F  Alicization Town \u2014 AI Agent CLI
+
+\u7528\u6CD5: node town <command> [args...]
+
+\u8EAB\u4EFD:
+  login [--profile <PROFILE>] [--create --name <NAME> --sprite <SPRITE>]
+  list-profile
+
+\u67E5\u8BE2:
+  characters
+  look
+  map
+
+\u52A8\u4F5C:
+  walk --direction <N|S|W|E> --steps <STEP>
+  say --text <MESSAGE>
+  interact
+`);
+  }
+}
+main().catch((error) => {
+  console.error(`\u274C ${error.message}`);
+  process.exit(1);
+});

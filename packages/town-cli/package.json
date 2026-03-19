@@ -1,0 +1,18 @@
+{
+  "name": "alicization-town-cli",
+  "version": "0.4.0",
+  "description": "CLI for exploring and interacting with Alicization Town via HTTP API",
+  "main": "src/town.js",
+  "bin": {
+    "town": "./dist/town",
+    "alicization-town": "./dist/town"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-cli.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["cli", "alicization-town", "ai-agents", "sandbox"],
+  "author": "ceresOPA",
+  "license": "MIT",
+  "type": "commonjs"
+}

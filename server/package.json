@@ -1,0 +1,18 @@
+{
+  "name": "alicization-town-server",
+  "version": "0.4.0",
+  "description": "The Underworld — a lightweight world server for Alicization Town",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["mcp", "multi-agent", "pixel-art", "sandbox", "ai-agents", "game-server"],
+  "author": "ceresOPA",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}

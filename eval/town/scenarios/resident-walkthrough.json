@@ -1,0 +1,67 @@
+{
+  "suite": "town-resident-evaluation",
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "orientation-zh",
+      "brief": "你刚到镇子上，什么都不了解。先查看一下小镇的地图，弄清楚镇上都有哪些地方。接着环顾四周，了解自己当前所处的位置和周围的环境。最后向镇上的人打个招呼，就说：大家好！我是刚来到这个小镇的新居民，请多多关照！",
+      "expected_world_state": "查看了地图，观察了周围环境，在出生地附近说出了固定的中文问候语。",
+      "assessment_points": [
+        "[world_truth] 观测日志出现真实的世界状态变化。",
+        "[world_truth] 最终世界状态中的发言包含固定中文问候语。",
+        "[format_truth] 引擎调用了 read_map_directory 和 look_around。",
+        "[persona_truth] summary 以第一人称叙述，无元语境泄露。"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "exploration-zh",
+      "brief": "探索整个小镇！从你所在的位置出发，先往东走几步，看看那边有什么。然后再往南走几步，看看那边的风景。每到一个新地方都要环顾四周，顺便在路上和人打个招呼。走完后说说你对这个小镇的第一印象。",
+      "expected_world_state": "角色发生了多次移动（东、南），至少观察了两次，有过发言。",
+      "assessment_points": [
+        "[world_truth] 观测日志中存在至少 3 条以上的 timeline 记录。",
+        "[world_truth] 角色最终位置不再是出生点 (5,5)。",
+        "[format_truth] 引擎调用了 walk 和 look_around。",
+        "[persona_truth] summary 提到了移动过程中看到的地方。"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "social-interaction-zh",
+      "brief": "你是新来的居民，想融入小镇。先看看地图找到有意思的地方。然后走到那里去，在那个地方尝试进行一次互动。之后说一句感想，比如：这个地方真有趣！最后再看看周围还有什么值得注意的。",
+      "expected_world_state": "角色查看了地图，移动到了某个区域，完成了互动，说了话，又做了一次观察。",
+      "assessment_points": [
+        "[world_truth] 最终世界状态中 interaction 非空。",
+        "[world_truth] 最终世界状态中有发言。",
+        "[format_truth] 引擎调用了 interact 和 say。",
+        "[persona_truth] summary 提到了互动的体验。"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "navigation-challenge-zh",
+      "brief": "你想去小镇的东北方向看看。先查看地图了解布局。然后向东走5步，观察一下周围。接着向北走3步，再观察一次。在最终位置打个招呼说：终于走到这里了！然后完成一次互动。告诉我你一路上经过了哪些地方。",
+      "expected_world_state": "角色执行了东走5步、北走3步的导航序列，中间有两次观察，最终位置附近的发言和互动。",
+      "assessment_points": [
+        "[world_truth] 角色最终位置接近 (10,2) 区域。",
+        "[world_truth] timeline 中至少有 4 条记录。",
+        "[format_truth] 引擎调用了 walk 至少两次，look_around 至少两次。",
+        "[persona_truth] summary 按时间线描述了移动路径。"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "full-life-zh",
+      "brief": "体验一整天的小镇生活。你要做以下所有事情，顺序自由：查看地图了解小镇布局；环顾四周了解出发点环境；沿着街道向东走两段路；到达新位置后观察四周；在当前位置完成一次互动；向周围的人说：大家好！我是刚来到这个小镇的新居民，请多多关照！再往南走一段，看看那边是什么地方。用你自己的话回忆这一整天的经历。",
+      "expected_world_state": "角色完成了完整的小镇生活循环：地图、观察、移动、互动、社交、再移动。timeline 记录丰富。",
+      "assessment_points": [
+        "[world_truth] timeline 中至少有 6 条记录。",
+        "[world_truth] 服务端观测到了 interaction 和 message。",
+        "[world_truth] 角色最终位置不在出生点。",
+        "[format_truth] 引擎调用了全部 5 种工具。",
+        "[persona_truth] summary 以第一人称叙述完整的一天经历。",
+        "[persona_truth] summary 至少覆盖 3 个真实行动锚点。"
+      ]
+    }
+  ]
+}
