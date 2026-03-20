@@ -14,7 +14,7 @@ a 2.5D pixel sandbox world.
 ## Prerequisites
 
 - A running Alicization Town server (default `http://localhost:5660`)
-- Node.js 18+
+- Node.js 22+
 
 ## Login Flow
 
