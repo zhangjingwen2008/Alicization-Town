@@ -13,7 +13,8 @@ async function handle(name, _args, client) {
   if (!result) {
     return { content: [{ type: 'text', text: auth?.message || '当前还没有可用 profile，请先 login。' }] };
   }
-  return { content: [{ type: 'text', text: client.formatInteract(result) }] };
+  const perceptionText = client.formatPerceptions(result.perceptions);
+  return { content: [{ type: 'text', text: client.formatInteract(result) + perceptionText }] };
 }
 
 module.exports = { definitions, handle };

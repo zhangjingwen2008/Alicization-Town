@@ -21,7 +21,7 @@
     let mouseX = -1, mouseY = -1;
 
     // === 镜头状态 ===
-    let camera = { x: 0, y: 0, targetX: 0, targetY: 0, zoom: 2.0, targetZoom: 2.0 };
+    let camera = { x: 0, y: 0, targetX: 0, targetY: 0, zoom: 1.0, targetZoom: 1.0 };
     let isCameraFollowing = false;
     function getMinZoom() {
       if (!mapData) return 0.5;
@@ -89,7 +89,7 @@
     const emoteImages = {};
     for (let i = 1; i <= 16; i++) { const img = new Image(); img.src = `assets/emotes/emote${i}.png`; emoteImages[i] = img; }
 
-    const ITEM_NAMES = ['Noodle','Sushi','Fish','Onigiri','Meat','FortuneCookie','Honey','LifePot','MilkPot','WaterPot','Heart','Sword','Katana','Bow','GoldCoin','GoldKey'];
+    const ITEM_NAMES = ['Noodle','Sushi','Fish','Onigiri','Meat','FortuneCookie','Honey','LifePot','MilkPot','WaterPot','Heart','Sword','Katana','Bow','GoldCoin','GoldKey','Billboard'];
     const itemImages = {};
     ITEM_NAMES.forEach(name => { const img = new Image(); img.src = `assets/items/${name}.png`; itemImages[name] = img; });
 
@@ -618,6 +618,25 @@
     }
 
     // ==========================================
+    // === 静态地标（告示牌等）===
+    // ==========================================
+    function drawStaticLandmarks(){
+      if(!mapData) return;
+      const zl=mapData.layers.find(l=>l.type==='objectgroup');
+      if(!zl||!zl.objects) return;
+      const sx=TILE_SIZE/mapData.tilewidth, sy=TILE_SIZE/mapData.tileheight;
+      zl.objects.forEach(z=>{
+        if(z.type!=='landmark') return;
+        const img=itemImages['Billboard'];
+        if(!img||!img.complete) return;
+        const px=z.x*sx, py=z.y*sy;
+        ctx.imageSmoothingEnabled=false;
+        ctx.drawImage(img, px-4, py-8, TILE_SIZE*1.4, TILE_SIZE*1.4);
+        ctx.imageSmoothingEnabled=true;
+      });
+    }
+
+    // ==========================================
     // === 绘制瓦片 ===
     // ==========================================
     function drawTile(gid,x,y){
@@ -709,6 +728,7 @@
       drawParticlesOfType('shimmer');
       drawAnimDecors('bottom');
       drawNpcAnimals();
+      drawStaticLandmarks();
       drawPlayerTrails();
 
       // 被选中玩家所在区域要持续高亮，方便远距离追踪。
@@ -746,7 +766,7 @@
         ctx.drawImage(si,col*pw,row*ph,pw,ph,sx,sy-10,TILE_SIZE*1.2,TILE_SIZE*1.2);
         const cx2=sx+TILE_SIZE/2;
         const floatY=Math.sin(Date.now()/300+p.x)*2;
-        const nameY=sy-15+floatY;
+        const nameY=sy-15;
 
         ctx.restore();
 
@@ -763,11 +783,13 @@
           }
 
           ctx.font='400 14px "Pixelify Sans","Comic Sans MS",sans-serif';
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle=idle?'rgba(26,26,46,0.55)':'rgba(26,26,46,0.9)'; ctx.strokeText(p.name,cx2,nameY);
-          ctx.fillStyle=p.name==='Observer'?'#f1c40f':(idle?'rgba(255,255,255,0.72)':'#ffffff'); ctx.fillText(p.name,cx2,nameY);
+          ctx.textAlign='left'; ctx.textBaseline='middle';
+          const nameX=sx+TILE_SIZE*1.2+4;
+          ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle=idle?'rgba(26,26,46,0.55)':'rgba(26,26,46,0.9)'; ctx.strokeText(p.name,nameX,nameY);
+          ctx.fillStyle=p.name==='Observer'?'#f1c40f':(idle?'rgba(255,255,255,0.72)':'#ffffff'); ctx.fillText(p.name,nameX,nameY);
 
           const bubbleY=sy-27+floatY;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
           if(p.isThinking){
             const thinkEmotes=[1,6,2],idx=thinkEmotes[Math.floor(Date.now()/900)%3],ei=emoteImages[idx];
             const bw=28,bh=28,bx=cx2-14,by=bubbleY-bh;
@@ -969,26 +991,29 @@
       const players=Object.values(clientPlayers).filter(p=>p.name!=='Observer');
       aiCountEl.textContent=`${players.length} online`;
       aiListEl.innerHTML='';
-      const isMobile = window.innerWidth <= 480;
-      const isTablet = window.innerWidth <= 960;
-      const avatarSize = isMobile ? 18 : (isTablet ? 24 : 28);
       players.forEach(p=>{
-        const card=document.createElement('div');
-        card.className='ai-card'+(selectedPlayerId===p.id?' selected':'');
-        const ac=document.createElement('canvas'); ac.width=16; ac.height=16; ac.className='ai-avatar';
-        ac.style.width=avatarSize+'px'; ac.style.height=avatarSize+'px'; ac.style.display='block'; ac.style.flexShrink='0';
+        const wrap=document.createElement('div');
+        wrap.className='ai-avatar-wrap'+(selectedPlayerId===p.id?' selected':'');
+        wrap.title=`${p.name}\n${p.currentZoneName||'小镇街道'}`;
+        // Canvas: 32x32 internal, CSS sizes it responsively
+        const ac=document.createElement('canvas'); ac.width=32; ac.height=32; ac.className='ai-avatar-icon';
         const si=(p.sprite&&characterImages[p.sprite])?characterImages[p.sprite]:images['player'];
-        if(si&&si.complete){const actx=ac.getContext('2d');actx.imageSmoothingEnabled=false;actx.drawImage(si,0,0,si.width/4,si.height/4,0,0,16,16);}
+        if(si&&si.complete){
+          const actx=ac.getContext('2d'); actx.imageSmoothingEnabled=false;
+          // Sample the front-facing idle frame (row 0, col 0)
+          const fw=si.width/4, fh=si.height/4;
+          actx.drawImage(si, 0, 0, fw, fh, 0, 0, 32, 32);
+        }
         const statusClass=p.isThinking?'thinking':(isPlayerIdle(p)?'idle':'active');
-        const statusLabel=p.isThinking?'Thinking':(isPlayerIdle(p)?'Inactive':'Active');
-        card.innerHTML=`<div class="ai-info"><div class="ai-name">${escapeHtml(p.name)}</div><div class="ai-zone">${escapeHtml(p.currentZoneName||'小镇街道')}</div></div><div class="ai-status-dot ${statusClass}" title="${statusLabel}"></div>`;
-        card.prepend(ac);
-        card.addEventListener('click',()=>{
+        const dot=document.createElement('span'); dot.className='ai-avatar-dot '+statusClass;
+        const nameEl=document.createElement('span'); nameEl.className='ai-avatar-name'; nameEl.textContent=p.name;
+        wrap.appendChild(ac); wrap.appendChild(dot); wrap.appendChild(nameEl);
+        wrap.addEventListener('click',()=>{
           if(selectedPlayerId===p.id){ selectedPlayerId=null; isCameraFollowing=false; activityDetailEl.classList.remove('visible'); }
           else selectAndFollowPlayer(p.id);
           updateAiPanel();
         });
-        aiListEl.appendChild(card);
+        aiListEl.appendChild(wrap);
       });
       if(selectedPlayerId&&!clientPlayers[selectedPlayerId]){ selectedPlayerId=null; isCameraFollowing=false; activityDetailEl.classList.remove('visible'); }
     }

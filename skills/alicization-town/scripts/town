@@ -648,7 +648,7 @@ var require_formatters = __commonJS({
     function formatWalk(direction, steps) {
       return `\u4F60\u8BD5\u56FE\u5411 ${direction} \u8D70 ${steps} \u6B65\u3002\u8BF7\u7528 look \u786E\u8BA4\u662F\u5426\u5230\u8FBE\uFF0C\u6216\u662F\u5426\u649E\u5899\u3002`;
     }
-    function formatSay(text) {
+    function formatChatSend(text) {
       return `\u4F60\u8BF4: ${text}`;
     }
     function formatInteract(result) {
@@ -685,7 +685,7 @@ var require_formatters = __commonJS({
       formatMap,
       formatLook,
       formatWalk,
-      formatSay,
+      formatChatSend,
       formatInteract,
       parseFlags
     };
@@ -756,7 +756,7 @@ var require_town_client = __commonJS({
       formatMap,
       formatLook,
       formatWalk,
-      formatSay,
+      formatChatSend,
       formatInteract,
       parseFlags
     };
@@ -833,7 +833,7 @@ var require_explore = __commonJS({
 // packages/town-cli/src/lib/act.js
 var require_act = __commonJS({
   "packages/town-cli/src/lib/act.js"(exports2, module2) {
-    var { runAuthenticated, formatWalk, formatSay, formatInteract, parseFlags } = require_core();
+    var { runAuthenticated, formatWalk, formatChatSend, formatInteract, parseFlags } = require_core();
     function throwForAuth(auth) {
       if (!auth) return;
       throw new Error(auth.message || "\u5F53\u524D\u65E0\u6CD5\u6267\u884C\u8BE5\u64CD\u4F5C\uFF0C\u8BF7\u5148 login\u3002");
@@ -850,22 +850,22 @@ var require_act = __commonJS({
       if (!result) throwForAuth(auth);
       console.log(formatWalk(direction, steps));
     }
-    async function say(args2) {
+    async function chat(args2) {
       const flags = parseFlags(args2);
       const text = flags.text || flags._.join(" ");
       if (!text) {
-        throw new Error("\u7528\u6CD5: town say --text <\u6D88\u606F\u5185\u5BB9>");
+        throw new Error("\u7528\u6CD5: town chat --text <\u6D88\u606F\u5185\u5BB9>");
       }
-      const { auth, result } = await runAuthenticated("POST", "/api/say", { text });
+      const { auth, result } = await runAuthenticated("POST", "/api/chat", { text });
       if (!result) throwForAuth(auth);
-      console.log(formatSay(text));
+      console.log(formatChatSend(text));
     }
     async function interact() {
       const { auth, result } = await runAuthenticated("POST", "/api/interact");
       if (!result) throwForAuth(auth);
       console.log(formatInteract(result));
     }
-    module2.exports = { walk, say, interact };
+    module2.exports = { walk, chat, interact };
   }
 });
 
@@ -892,8 +892,8 @@ async function main() {
     case "walk":
       await require_act().walk(args);
       break;
-    case "say":
-      await require_act().say(args);
+    case "chat":
+      await require_act().chat(args);
       break;
     case "interact":
       await require_act().interact(args);
@@ -914,7 +914,7 @@ async function main() {
 
 \u52A8\u4F5C:
   walk --direction <N|S|W|E> --steps <STEP>
-  say --text <MESSAGE>
+  chat --text <MESSAGE>
   interact
 `);
   }

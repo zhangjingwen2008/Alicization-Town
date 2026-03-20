@@ -5,8 +5,10 @@ const {
   loadKeystore,
   saveKeystore,
   setDefaultProfileName,
+  setServerFingerprint,
   listProfileNames,
 } = require('./storage');
+const { serverFingerprint, setDefaultServer } = require('./server-registry');
 const { discoverServer, requestJson } = require('./http-client');
 
 function base64Url(buffer) {
@@ -42,9 +44,9 @@ function normalizeProfileName(input) {
     .replace(/^-+|-+$/g, '');
 }
 
-function deriveProfileName({ profile, name, handle }) {
+function deriveProfileName({ profile, name, handle, serverFp }) {
   const base = normalizeProfileName(profile || name || handle || 'profile') || 'profile';
-  const existing = new Set(listProfileNames());
+  const existing = new Set(listProfileNames(serverFp));
   if (!existing.has(base)) return base;
   let suffix = 2;
   while (existing.has(`${base}-${suffix}`)) suffix += 1;
@@ -59,10 +61,17 @@ async function createRemoteProfile(server, name, sprite, publicKey) {
 
 async function createProfile({ profile: preferredProfileName, name, sprite, server }) {
   const targetServer = await discoverServer(server);
+  const targetServerFp = serverFingerprint(targetServer);
+  setServerFingerprint(targetServerFp);
   const keyMaterial = generateKeyMaterial();
   const created = await createRemoteProfile(targetServer, name, sprite, keyMaterial.publicKey);
   const now = new Date().toISOString();
-  const profileName = deriveProfileName({ profile: preferredProfileName, name: created.name || name, handle: created.handle });
+  const profileName = deriveProfileName({
+    profile: preferredProfileName,
+    name: created.name || name,
+    handle: created.handle,
+    serverFp: targetServerFp,
+  });
   const localProfile = {
     profile: profileName,
     handle: created.handle,
@@ -75,14 +84,15 @@ async function createProfile({ profile: preferredProfileName, name, sprite, serv
     lastUsedAt: now,
   };
 
-  saveProfile(localProfile);
+  saveProfile(localProfile, targetServerFp);
   saveKeystore(localProfile.handle, {
     handle: localProfile.handle,
     publicKey: keyMaterial.publicKey,
     deviceId: keyMaterial.deviceId,
     jwk: keyMaterial.jwk,
   });
-  setDefaultProfileName(localProfile.profile);
+  setDefaultProfileName(localProfile.profile, targetServerFp);
+  setDefaultServer(targetServer);
   return localProfile;
 }
 
@@ -102,6 +112,8 @@ async function loginWithProfile(profile) {
   }
 
   const server = await discoverServer(profile.server);
+  const targetServerFp = serverFingerprint(server);
+  setServerFingerprint(targetServerFp);
   const timestamp = Date.now();
   const signature = signLoginProof(profile.handle, timestamp, keystore.jwk);
   const response = await requestJson(server, 'POST', '/api/login', {
@@ -125,8 +137,9 @@ async function loginWithProfile(profile) {
     lastUsedAt: new Date().toISOString(),
   };
 
-  saveProfile(nextProfile);
-  setDefaultProfileName(nextProfile.profile);
+  saveProfile(nextProfile, targetServerFp);
+  setDefaultProfileName(nextProfile.profile, targetServerFp);
+  setDefaultServer(server);
 
   return {
     status: response.status,
@@ -144,7 +157,4 @@ async function loginWithProfile(profile) {
 module.exports = {
   createProfile,
   loginWithProfile,
-  generateKeyMaterial,
-  signLoginProof,
-  normalizeProfileName,
 };

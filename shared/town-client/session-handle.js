@@ -2,21 +2,29 @@ const {
   getDefaultProfileName,
   loadProfile,
   saveProfile,
+  setServerFingerprint,
+  getServerFingerprint,
 } = require('./storage');
+const { serverFingerprint } = require('./server-registry');
 const { createProfile, loginWithProfile } = require('./auth-client');
 const { requestJson } = require('./http-client');
 
-function resolveProfileName(profile) {
-  return profile || getDefaultProfileName();
+function resolveServerFingerprint(server) {
+  return server ? serverFingerprint(server) : getServerFingerprint();
 }
 
-function getProfileOrThrow(profileName) {
-  const resolvedProfile = resolveProfileName(profileName);
+function resolveProfileName(profile, server) {
+  return profile || getDefaultProfileName(resolveServerFingerprint(server));
+}
+
+function getProfileOrThrow(profileName, server) {
+  const serverFp = resolveServerFingerprint(server);
+  const resolvedProfile = resolveProfileName(profileName, server);
   if (!resolvedProfile) {
     throw new Error('本地还没有 profile，请使用 login 的创建模式创建角色。');
   }
 
-  const profile = loadProfile(resolvedProfile);
+  const profile = loadProfile(resolvedProfile, serverFp);
   if (!profile) {
     throw new Error(`Profile "${resolvedProfile}" 不存在。`);
   }
@@ -30,16 +38,17 @@ class SessionHandle {
   }
 
   bindProfile(profile) {
+    if (profile?.server) setServerFingerprint(serverFingerprint(profile.server));
     if (profile?.profile) this.profileName = profile.profile;
     return profile;
   }
 
-  resolveProfileName(explicitProfile) {
-    return resolveProfileName(explicitProfile || this.profileName);
+  resolveProfileName(explicitProfile, explicitServer) {
+    return resolveProfileName(explicitProfile || this.profileName, explicitServer);
   }
 
-  getProfileOrThrow(explicitProfile) {
-    return this.bindProfile(getProfileOrThrow(explicitProfile || this.profileName));
+  getProfileOrThrow(explicitProfile, explicitServer) {
+    return this.bindProfile(getProfileOrThrow(explicitProfile || this.profileName, explicitServer));
   }
 
   async createProfile(options) {
@@ -80,7 +89,7 @@ class SessionHandle {
       };
     }
 
-    const resolvedProfile = this.resolveProfileName(options.profile);
+    const resolvedProfile = this.resolveProfileName(options.profile, options.server);
     if (!resolvedProfile) {
       return {
         status: 'needs_creation',
@@ -95,7 +104,7 @@ class SessionHandle {
       };
     }
 
-    const profile = this.getProfileOrThrow(resolvedProfile);
+    const profile = this.getProfileOrThrow(resolvedProfile, options.server);
     this.profileName = resolvedProfile;
     return loginWithProfile(profile);
   }
