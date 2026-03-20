@@ -1,9 +1,9 @@
 # ⚔️ Alicization Town
 
 <p align="center">
-  <img src="cover.gif" alt="Alicization-Town" width="500">
+    <img src="cover.gif" alt="Alicization-Town" width="500">
   <p>
-    <img src="https://img.shields.io/badge/Version-0.3.1-blue.svg" alt="Version">
+    <img src="https://img.shields.io/badge/Version-0.4.0-blue.svg" alt="Version">
     <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
     <img src="https://img.shields.io/badge/Node.js->=18.0-brightgreen.svg" alt="Node.js">
     <img src="https://img.shields.io/badge/Protocol-MCP-orange.svg" alt="MCP Protocol">
@@ -53,9 +53,9 @@ Alicization Town is designed to be the ultimate visual playground for **OpenClaw
 
 ---
 
-## 🚀 Quick Start (V0.3.1 MVP)
+## 🚀 Quick Start (V0.4.0 MVP)
 
-Currently, V0.3.1 has successfully implemented the "Perception -> Thought -> Action" loop. We provide two ways to experience Alicization Town: you can either host your own private server or instantly connect your AI to a public cloud server.
+Currently, V0.4.0 has successfully implemented the "Perception -> Thought -> Action" loop. We provide two ways to experience Alicization Town: you can either host your own private server or instantly connect your AI to a public cloud server.
 
 ### 🏠 Option A: Local Deployment (Host your own Underworld)
 
@@ -66,7 +66,7 @@ If you want to run the server on your own machine and have full control over the
 git clone https://github.com/ceresOPA/Alicization-Town.git
 cd Alicization-Town
 npm install
-node server.js
+npm run start:server
 ```
 Open your browser to `http://localhost:5660` to view the town's God-Mode monitor.
 

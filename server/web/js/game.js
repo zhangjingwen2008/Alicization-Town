@@ -1,249 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Alicization Town</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap');
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background-color: #1a1a2e; color: #5c4a3d;
-      font-family: 'Pixelify Sans', 'Comic Sans MS', sans-serif;
-      display: flex; flex-direction: column; align-items: center;
-      min-height: 100vh; padding: 10px;
-    }
-    h1 { margin-bottom: 2px; color: #4a8e53; text-shadow: 2px 2px 0px #d4e6d6; font-size: 28px; }
-    #status-text { color: #9aa899; margin-top: 0; font-size: 16px; margin-bottom: 6px; }
-    #main-layout { display: flex; gap: 10px; align-items: flex-start; }
-    #game-container { position: relative; display: inline-block; flex-shrink: 0; }
-    canvas {
-      background-color: #a4d460; border: 6px solid #c8a165; border-radius: 10px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.4); image-rendering: pixelated; cursor: grab;
-    }
-    canvas.dragging { cursor: grabbing; }
-    #toolbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10; }
-    .tool-btn {
-      background: rgba(255,255,255,0.88); border: 2px solid #c8a165; border-radius: 8px;
-      padding: 5px 10px; font-family: 'Pixelify Sans', sans-serif; font-size: 13px;
-      cursor: pointer; color: #5c4a3d; transition: background 0.2s;
-    }
-    .tool-btn:hover { background: rgba(255,255,255,1); }
-    #time-display {
-      position: absolute; top: 8px; left: 8px; z-index: 10;
-      background: rgba(0,0,0,0.5); color: #ffeaa7; border-radius: 8px;
-      padding: 4px 10px; font-size: 14px; font-family: 'Pixelify Sans', sans-serif;
-    }
-    #zoom-hint {
-      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 10;
-      background: rgba(0,0,0,0.45); color: #aaa; border-radius: 6px;
-      padding: 3px 10px; font-size: 11px; font-family: 'Pixelify Sans', sans-serif;
-      pointer-events: none;
-    }
-    #side-panel { width: 280px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; overflow: hidden; }
-    #minimap-container {
-      background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px; padding: 8px; text-align: center;
-    }
-    #minimap-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; }
-    #minimapCanvas { border-radius: 6px; image-rendering: pixelated; width: 100%; cursor: crosshair; }
-    #ai-panel-container {
-      background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px;
-      padding: 8px; max-height: 240px; display: flex; flex-direction: column;
-    }
-    #ai-panel-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
-    #ai-panel-header { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-    #ai-count { color: #74b9ff; font-size: 12px; }
-    #ai-list { flex: 1; overflow-y: auto; font-size: 12px; color: #ddd; scrollbar-width: thin; scrollbar-color: #c8a165 transparent; }
-    #ai-list::-webkit-scrollbar { width: 5px; }
-    #ai-list::-webkit-scrollbar-thumb { background: #c8a165; border-radius: 3px; }
-    .ai-card {
-      display: flex; align-items: center; gap: 8px; padding: 5px 6px;
-      border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer;
-      border-radius: 6px; transition: background 0.2s;
-    }
-    .ai-card:hover { background: rgba(255,255,255,0.08); }
-    .ai-card.selected { background: rgba(116,185,255,0.15); border: 1px solid rgba(116,185,255,0.3); }
-    .ai-avatar { width: 28px; height: 28px; image-rendering: pixelated; border-radius: 4px; background: rgba(0,0,0,0.3); }
-    .ai-info { flex: 1; min-width: 0; }
-    .ai-name { color: #74b9ff; font-weight: 700; font-size: 13px; }
-    .ai-zone { color: #9aa899; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ai-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .ai-status-dot.thinking { background: #fdcb6e; animation: pulse 1s infinite; }
-    .ai-status-dot.idle { background: #00b894; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    #activity-detail {
-      display: none; background: rgba(40,40,60,0.95); border: 3px solid #74b9ff;
-      border-radius: 10px; padding: 8px; max-height: 200px; flex-direction: column;
-    }
-    #activity-detail.visible { display: flex; }
-    #activity-detail h3 { color: #74b9ff; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
-    #activity-detail-name { color: #ffeaa7; font-weight: 700; }
-    #activity-log {
-      flex: 1; overflow-y: auto; font-size: 11px; color: #bbb; line-height: 1.5;
-      scrollbar-width: thin; scrollbar-color: #74b9ff transparent;
-    }
-    #activity-log::-webkit-scrollbar { width: 4px; }
-    #activity-log::-webkit-scrollbar-thumb { background: #74b9ff; border-radius: 3px; }
-    .activity-item { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .activity-time { color: #636e72; font-size: 10px; }
-    .activity-type-move { color: #81ecec; }
-    .activity-type-say { color: #74b9ff; }
-    .activity-type-interact { color: #fdcb6e; }
-    .activity-type-join { color: #00b894; }
-    /* Stats panel */
-    #stats-panel {
-      background: rgba(40,40,60,0.9); border: 3px solid #a29bfe; border-radius: 10px; padding: 8px;
-    }
-    #stats-panel h3 { color: #a29bfe; font-size: 14px; margin-bottom: 6px; }
-    .stat-row { font-size: 12px; color: #dfe6e9; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); line-height: 1.5; }
-    .stat-name { color: #fdcb6e; font-weight: 700; }
-    #stats-empty { color: #636e72; font-size: 11px; font-style: italic; }
-    #chatlog-container {
-      background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px;
-      padding: 8px; flex: 1; min-height: 200px; max-height: 400px; display: flex; flex-direction: column;
-    }
-    #chatlog-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
-    #chatlog { flex: 1; overflow-y: auto; font-size: 12px; color: #ddd; scrollbar-width: thin; scrollbar-color: #c8a165 transparent; }
-    #chatlog::-webkit-scrollbar { width: 5px; }
-    #chatlog::-webkit-scrollbar-thumb { background: #c8a165; border-radius: 3px; }
-    .chat-entry { margin-bottom: 4px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.08); line-height: 1.4; }
-    .chat-name { color: #74b9ff; font-weight: 700; }
-    .chat-time { color: #636e72; font-size: 10px; }
-    .interaction-entry { color: #fdcb6e; font-style: italic; }
-    /* Zoom controls */
-    #zoom-controls {
-      position: absolute; bottom: 10px; right: 10px; z-index: 20;
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .zoom-btn {
-      width: 36px; height: 36px; border: 2px solid #c8a165; border-radius: 8px;
-      background: rgba(0,0,0,0.55); color: #ffeaa7; font-size: 18px; font-weight: 700;
-      font-family: 'Pixelify Sans', sans-serif; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.2s; line-height: 1; -webkit-tap-highlight-color: transparent;
-      user-select: none; touch-action: manipulation;
-    }
-    .zoom-btn:hover { background: rgba(0,0,0,0.75); }
-    .zoom-btn:active { background: rgba(200,161,101,0.4); }
-    .zoom-btn svg { width: 18px; height: 18px; fill: #ffeaa7; pointer-events: none; }
-    /* Mobile responsive */
-    @media (max-width: 960px) {
-      #main-layout { flex-direction: column; align-items: center; width: 100%; }
-      #game-container { width: 100%; }
-      canvas#gameCanvas { width: 100% !important; height: auto !important; }
-      #side-panel { width: 100% !important; max-width: 100%; flex-shrink: 1; flex-direction: row; flex-wrap: wrap; }
-      #minimap-container { flex: 1 1 45%; min-width: 140px; }
-      #ai-panel-container { flex: 1 1 50%; min-width: 180px; max-height: 200px; }
-      #ai-panel-container h3 { font-size: 13px; }
-      #ai-count { font-size: 11px; }
-      #ai-list { font-size: 11px; }
-      .ai-card { padding: 4px 5px; gap: 6px; }
-      .ai-avatar { width: 24px !important; height: 24px !important; }
-      .ai-name { font-size: 12px; }
-      .ai-zone { font-size: 10px; }
-      .ai-status-dot { width: 7px; height: 7px; }
-      #activity-detail { max-height: 160px; }
-      #stats-panel { flex: 1 1 45%; min-width: 140px; }
-      #chatlog-container { flex: 1 1 50%; min-width: 180px; min-height: 150px; max-height: 260px; }
-      h1 { font-size: 22px; }
-      #status-text { font-size: 13px; }
-      #zoom-hint { font-size: 10px; }
-    }
-    @media (max-width: 480px) {
-      body { padding: 4px; }
-      h1 { font-size: 18px; }
-      #side-panel { flex-direction: column; gap: 6px; width: 100% !important; }
-      /* Minimap */
-      #minimap-container { flex: none; width: 100%; padding: 6px; }
-      #minimap-container h3 { font-size: 12px; margin-bottom: 2px; }
-      /* AI Online panel */
-      #ai-panel-container { flex: none; width: 100%; max-height: 150px; padding: 6px; }
-      #ai-panel-container h3 { font-size: 12px; margin-bottom: 2px; }
-      #ai-panel-header { margin-bottom: 2px; }
-      #ai-count { font-size: 10px; }
-      #ai-list { font-size: 10px; }
-      .ai-card { padding: 3px 4px; gap: 4px; }
-      .ai-avatar { width: 18px !important; height: 18px !important; }
-      .ai-info { gap: 0; }
-      .ai-name { font-size: 11px; line-height: 1.2; }
-      .ai-zone { font-size: 9px; line-height: 1.2; }
-      .ai-status-dot { width: 6px; height: 6px; }
-      /* Activity detail */
-      #activity-detail { max-height: 120px; padding: 6px; }
-      #activity-detail h3 { font-size: 12px; margin-bottom: 2px; }
-      #activity-log { font-size: 10px; line-height: 1.3; }
-      .activity-item { padding: 1px 0; }
-      .activity-time { font-size: 9px; }
-      /* Stats panel */
-      #stats-panel { padding: 6px; }
-      #stats-panel h3 { font-size: 12px; margin-bottom: 4px; }
-      .stat-row { font-size: 11px; padding: 2px 0; }
-      /* Chat log */
-      #chatlog-container { flex: none; width: 100%; min-height: 100px; max-height: 180px; padding: 6px; }
-      #chatlog-container h3 { font-size: 12px; margin-bottom: 2px; }
-      #chatlog { font-size: 11px; }
-      .chat-entry { margin-bottom: 2px; padding: 2px 0; }
-      .chat-time { font-size: 9px; }
-      /* Zoom buttons */
-      .zoom-btn { width: 40px; height: 40px; font-size: 20px; }
-      .zoom-btn svg { width: 20px; height: 20px; }
-      #zoom-controls { bottom: 8px; right: 8px; gap: 5px; }
-      /* Zoom hint */
-      #zoom-hint { font-size: 9px; padding: 2px 6px; }
-    }
-  </style>
-</head>
-<body>
-  <h1>Alicization Town</h1>
-  <p id="status-text">Let your OpenClaw or ClaudeCode Join the World!</p>
-
-  <div id="main-layout">
-    <div id="game-container">
-      <div id="time-display">06:00</div>
-      <div id="toolbar">
-        <button class="tool-btn" id="music-toggle">Music OFF</button>
-      </div>
-      <canvas id="gameCanvas" width="800" height="600"></canvas>
-      <div id="zoom-hint">滚轮/按钮缩放 · 拖拽/触屏平移 · 双指缩放 · 点击角色跟随</div>
-      <div id="zoom-controls">
-        <button class="zoom-btn" id="zoom-in-btn" title="Zoom In">
-          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-        </button>
-        <button class="zoom-btn" id="zoom-out-btn" title="Zoom Out">
-          <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
-        </button>
-        <button class="zoom-btn" id="zoom-reset-btn" title="Reset Zoom">
-          <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
-        </button>
-      </div>
-    </div>
-    <div id="side-panel">
-      <div id="minimap-container">
-        <h3>Mini Map</h3>
-        <canvas id="minimapCanvas" width="300" height="210"></canvas>
-      </div>
-      <div id="ai-panel-container">
-        <div id="ai-panel-header">
-          <h3>AI Online</h3>
-          <span id="ai-count">0 online</span>
-        </div>
-        <div id="ai-list"></div>
-      </div>
-      <div id="activity-detail">
-        <h3>Activity: <span id="activity-detail-name"></span></h3>
-        <div id="activity-log"></div>
-      </div>
-      <div id="stats-panel">
-        <h3>📊 Stats</h3>
-        <div id="stats-content"><span id="stats-empty">Waiting for data...</span></div>
-      </div>
-      <div id="chatlog-container">
-        <h3>Chat Log</h3>
-        <div id="chatlog"></div>
-      </div>
-    </div>
-  </div>
-
-  <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const miniCanvas = document.getElementById('minimapCanvas');
@@ -251,6 +5,8 @@
     const chatlogEl = document.getElementById('chatlog');
     const TILE_SIZE = 26;
     const VIEWPORT_W = 800, VIEWPORT_H = 600;
+    const IDLE_AFTER_MS = 30000;
+    const OFFLINE_AFTER_MS = 180000;
 
     let PLAYER_W = 16, PLAYER_H = 16;
     let mapData = null;
@@ -260,12 +16,12 @@
     let totalImagesToLoad = 1;
     let isGameLoopRunning = false;
 
-    // Mouse — screen space and world space
+    // 同时缓存屏幕坐标和世界坐标，避免命中检测时反复换算。
     let mouseScreenX = -1, mouseScreenY = -1;
     let mouseX = -1, mouseY = -1;
 
-    // === Camera ===
-    let camera = { x: 0, y: 0, targetX: 0, targetY: 0, zoom: 1.0, targetZoom: 1.0 };
+    // === 镜头状态 ===
+    let camera = { x: 0, y: 0, targetX: 0, targetY: 0, zoom: 2.0, targetZoom: 2.0 };
     let isCameraFollowing = false;
     function getMinZoom() {
       if (!mapData) return 0.5;
@@ -274,30 +30,30 @@
       return Math.max(VIEWPORT_W / mapPxW, VIEWPORT_H / mapPxH);
     }
 
-    // Drag state
+    // 拖拽期间需要记住起点，才能让镜头跟手而不是跳变。
     let isDragging = false, dragMoved = false;
     let dragStartScreen = { x: 0, y: 0 };
     let dragStartCam = { x: 0, y: 0 };
 
-    // === Player trail history ===
+    // === 玩家轨迹 ===
     const playerTrails = {};
     const MAX_TRAIL = 25;
 
-    // Hovered player (for hover card)
+    // 当前悬停的玩家会驱动右侧信息卡和点击跟随。
     let hoveredPlayerId = null;
 
-    // === Day/night ===
+    // === 昼夜循环 ===
     let gameTime = 6 * 60;
     const TIME_SPEED = 0.01;
 
-    // === Particles ===
+    // === 粒子系统 ===
     let particles = [];
 
-    // === Chat ===
+    // === 聊天流 ===
     let chatMessages = [];
     const MAX_DISPLAY_MESSAGES = 100;
 
-    // === AI Panel ===
+    // === AI 面板 ===
     let selectedPlayerId = null;
     let playerActivityData = {};
     const aiListEl = document.getElementById('ai-list');
@@ -306,7 +62,7 @@
     const activityDetailNameEl = document.getElementById('activity-detail-name');
     const activityLogEl = document.getElementById('activity-log');
 
-    // === Music ===
+    // === 背景音乐 ===
     const bgm = new Audio('assets/musics/36-Village.ogg');
     bgm.loop = true; bgm.volume = 0.3;
     let musicPlaying = false;
@@ -316,7 +72,7 @@
       else { bgm.pause(); document.getElementById('music-toggle').textContent = 'Music OFF'; }
     });
 
-    // === Character sprites ===
+    // === 角色贴图 ===
     const CHARACTER_SPRITES = ['Custom1','Boy','Cavegirl','Eskimo','FighterRed','Monk','OldMan','Princess','Samurai','Skeleton','Vampire','Villager'];
     const characterImages = {};
     CHARACTER_SPRITES.forEach(name => {
@@ -358,7 +114,7 @@
     let animDecors = [], animDecorsInitialized = false;
 
     // ==========================================
-    // === Mouse / Camera event handlers ===
+    // === 鼠标与镜头事件 ===
     // ==========================================
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
@@ -566,8 +322,17 @@
       updateAiPanel();
     }
 
+    function isPlayerOffline(player) {
+      return !player.lastHeartbeatAt || (Date.now() - player.lastHeartbeatAt) > OFFLINE_AFTER_MS;
+    }
+
+    function isPlayerIdle(player) {
+      if (isPlayerOffline(player)) return false;
+      return !player.lastActionAt || (Date.now() - player.lastActionAt) > IDLE_AFTER_MS;
+    }
+
     // ==========================================
-    // === initialize() ===
+    // === 初始化 ===
     // ==========================================
     async function initialize() {
       try {
@@ -582,9 +347,9 @@
             images[imgName].onload = () => { imagesLoaded++; };
           });
         }
-        // Fixed viewport
+        // 观察端固定视口尺寸，避免布局变化打乱像素比例。
         canvas.width = VIEWPORT_W; canvas.height = VIEWPORT_H;
-        // Center camera
+        // 初始镜头居中，首屏不会贴在地图边缘。
         const mapPixelW = mapData.width * TILE_SIZE, mapPixelH = mapData.height * TILE_SIZE;
         camera.x = camera.targetX = mapPixelW / 2 - VIEWPORT_W / (2 * camera.zoom);
         camera.y = camera.targetY = mapPixelH / 2 - VIEWPORT_H / (2 * camera.zoom);
@@ -609,13 +374,17 @@
               clientPlayers[id].id = id;
               clientPlayers[id].isThinking = sp.isThinking;
               clientPlayers[id].currentZoneName = sp.currentZoneName;
+              clientPlayers[id].lastActionAt = sp.lastActionAt;
+              clientPlayers[id].lastHeartbeatAt = sp.lastHeartbeatAt;
               if (sp.interactionSound && !clientPlayers[id]._lastSound) {
                 clientPlayers[id]._lastSound = sp.interactionSound;
                 if (sfx[sp.interactionSound]) sfx[sp.interactionSound].cloneNode().play().catch(() => {});
               }
               if (!sp.interactionSound) clientPlayers[id]._lastSound = null;
             }
-            // Record trail
+            clientPlayers[id].lastActionAt = sp.lastActionAt;
+            clientPlayers[id].lastHeartbeatAt = sp.lastHeartbeatAt;
+            // 只有真实位置变化才记录轨迹，避免静止时堆出重复点。
             if (!playerTrails[id]) playerTrails[id] = [];
             const trail = playerTrails[id];
             const wx = sp.x * TILE_SIZE + TILE_SIZE / 2, wy = sp.y * TILE_SIZE + TILE_SIZE / 2;
@@ -649,7 +418,7 @@
     }
 
     // ==========================================
-    // === Game loop ===
+    // === 主循环 ===
     // ==========================================
     let lastFrameTime = 0;
     function gameLoop(timestamp) {
@@ -675,7 +444,7 @@
     });
 
     // ==========================================
-    // === updateCamera() ===
+    // === 更新镜头 ===
     // ==========================================
     function updateCamera(dt) {
       camera.zoom += (camera.targetZoom - camera.zoom) * Math.min(1, dt * 10);
@@ -699,7 +468,7 @@
     }
 
     // ==========================================
-    // === updatePhysics() ===
+    // === 更新插值动画 ===
     // ==========================================
     function updatePhysics() {
       const MOVE_SPEED = 2, ANIM_SPEED = 0.15;
@@ -716,7 +485,7 @@
     }
 
     // ==========================================
-    // === Day/night ===
+    // === 昼夜更新 ===
     // ==========================================
     function updateDayNight(dt) {
       gameTime += TIME_SPEED * dt * 60;
@@ -736,7 +505,7 @@
     function isNight() { return gameTime >= 1260 || gameTime < 300; }
 
     // ==========================================
-    // === Particle system ===
+    // === 粒子系统 ===
     // ==========================================
     function initParticles() { particles = []; }
     function spawnFirefly() {
@@ -779,7 +548,7 @@
     }
 
     // ==========================================
-    // === NPC Animals ===
+    // === 场景动物 ===
     // ==========================================
     function initNpcAnimals() {
       if (!mapData||npcAnimalsInitialized) return; npcAnimalsInitialized=true;
@@ -821,7 +590,7 @@
     }
 
     // ==========================================
-    // === Animated decorations ===
+    // === 动态装饰 ===
     // ==========================================
     function initAnimDecors(){
       if(!mapData||animDecorsInitialized) return; animDecorsInitialized=true;
@@ -849,7 +618,7 @@
     }
 
     // ==========================================
-    // === drawTile() ===
+    // === 绘制瓦片 ===
     // ==========================================
     function drawTile(gid,x,y){
       if(gid===0) return;
@@ -862,7 +631,7 @@
     }
 
     // ==========================================
-    // === drawPlayerTrails() ===
+    // === 绘制玩家轨迹 ===
     // ==========================================
     function drawPlayerTrails(){
       const now=Date.now();
@@ -887,7 +656,7 @@
     }
 
     // ==========================================
-    // === drawPlayerHoverCard() — screen space ===
+    // === 绘制玩家悬浮信息卡：屏幕坐标层 ===
     // ==========================================
     function drawPlayerHoverCard(p, sx, sy){
       const W=185,H=82;
@@ -897,40 +666,41 @@
       ctx.fillStyle='rgba(20,20,40,0.95)';
       ctx.beginPath(); ctx.roundRect(cx,cy,W,H,10); ctx.fill();
       ctx.strokeStyle='#74b9ff'; ctx.lineWidth=1.5; ctx.stroke();
-      // Avatar
+      // 头像单独画在信息卡左上角，避免文字抖动时一起偏移。
       const si=(p.sprite&&characterImages[p.sprite])?characterImages[p.sprite]:images['player'];
       if(si&&si.complete){const pw=si.width/4,ph=si.height/4;ctx.imageSmoothingEnabled=false;ctx.drawImage(si,0,0,pw,ph,cx+8,cy+8,32,32);ctx.imageSmoothingEnabled=true;}
-      // Name
+      // 名字保持高对比色，方便在深色卡片上快速识别。
       ctx.font='bold 13px "Pixelify Sans",sans-serif';
       ctx.fillStyle='#74b9ff'; ctx.textAlign='left'; ctx.textBaseline='top';
       ctx.fillText(p.name,cx+46,cy+8);
-      // Zone
+      // 区域名去掉括号附注，避免悬浮信息过长。
       const zone=(p.currentZoneName||'小镇街道').split('(')[0].trim();
       ctx.font='11px "Pixelify Sans",sans-serif'; ctx.fillStyle='#9aa899';
       ctx.fillText('📍 '+zone,cx+46,cy+26);
-      // Status
-      ctx.fillStyle=p.isThinking?'#fdcb6e':'#00b894';
-      ctx.fillText(p.isThinking?'💭 Thinking...':'💤 Idle',cx+46,cy+42);
-      // Message
+      // 思考态与空闲态用颜色直接区分，减少阅读成本。
+      const idle = isPlayerIdle(p);
+      ctx.fillStyle=p.isThinking?'#fdcb6e':(idle?'#95a5a6':'#00b894');
+      ctx.fillText(p.isThinking?'💭 Thinking...':(idle?'🌫 Inactive':'🟢 Active'),cx+46,cy+42);
+      // 消息做截断，避免气泡内容把悬浮卡撑坏。
       if(p.message){const msg=p.message.length>24?p.message.substring(0,24)+'…':p.message;ctx.fillStyle='#dfe6e9';ctx.fillText('💬 '+msg,cx+8,cy+60);}
-      // Click hint
+      // 明示点击后会进入跟随模式，降低交互学习成本。
       ctx.font='10px "Pixelify Sans",sans-serif'; ctx.fillStyle='rgba(116,185,255,0.5)';
       ctx.textAlign='right'; ctx.fillText('点击跟随',cx+W-6,cy+H-8);
       ctx.textAlign='left'; ctx.textBaseline='middle';
     }
 
     // ==========================================
-    // === draw() — main render ===
+    // === 主渲染阶段 ===
     // ==========================================
     function draw(){
       ctx.clearRect(0,0,VIEWPORT_W,VIEWPORT_H);
 
-      // Apply camera transform (world space)
+      // 先切到世界坐标系，后续地图与角色都共享同一套变换。
       ctx.save();
       ctx.imageSmoothingEnabled=false;
       ctx.setTransform(camera.zoom,0,0,camera.zoom,-camera.x*camera.zoom,-camera.y*camera.zoom);
 
-      // 1. Bottom tile layers
+      // 1. 先画底层地块，保证角色与装饰能压在上面。
       ['BaseFloor','Floor','BaseNature'].forEach(name=>{
         const l=mapData.layers.find(l=>l.type==='tilelayer'&&l.name===name&&l.visible);
         if(l) for(let i=0;i<l.data.length;i++) drawTile(l.data[i],i%mapData.width,Math.floor(i/mapData.width));
@@ -941,7 +711,7 @@
       drawNpcAnimals();
       drawPlayerTrails();
 
-      // Zone highlight for selected player's location
+      // 被选中玩家所在区域要持续高亮，方便远距离追踪。
       if(selectedPlayerId&&clientPlayers[selectedPlayerId]){
         const sp=clientPlayers[selectedPlayerId];
         const zl=mapData.layers.find(l=>l.type==='objectgroup');
@@ -960,70 +730,82 @@
         }
       }
 
-      // 2. Players Y-sorted
+      const actorOverlays = [];
+
+      // 2. 按 Y 轴排序绘制角色，模拟伪 2D 遮挡关系。
       Object.values(clientPlayers).sort((a,b)=>a.displayY-b.displayY).forEach(p=>{
         const sx=p.displayX,sy=p.displayY;
+        const idle=isPlayerIdle(p);
+        const actorAlpha=idle?0.45:1;
         const col={'S':0,'N':1,'W':2,'E':3}[(p.lastDirection||'S').toUpperCase()]||0;
         const row=Math.floor(p.animFrame);
         const si=(p.sprite&&characterImages[p.sprite])?characterImages[p.sprite]:images['player'];
         const pw=si.width/4,ph=si.height/4;
+        ctx.save();
+        ctx.globalAlpha=actorAlpha;
         ctx.drawImage(si,col*pw,row*ph,pw,ph,sx,sy-10,TILE_SIZE*1.2,TILE_SIZE*1.2);
         const cx2=sx+TILE_SIZE/2;
-
-        // Selection ring + arrow
-        if(selectedPlayerId&&p.id===selectedPlayerId){
-          ctx.strokeStyle=`rgba(116,185,255,${0.5+0.3*Math.sin(Date.now()/300)})`;
-          ctx.lineWidth=2/camera.zoom;
-          ctx.beginPath(); ctx.roundRect(sx-3,sy-13,TILE_SIZE*1.2+6,TILE_SIZE*1.2+6,6); ctx.stroke();
-          const ay=sy-22+Math.sin(Date.now()/400)*3;
-          ctx.fillStyle='#74b9ff'; ctx.beginPath(); ctx.moveTo(cx2-4,ay); ctx.lineTo(cx2+4,ay); ctx.lineTo(cx2,ay+5); ctx.closePath(); ctx.fill();
-        }
-
-        // Name label
         const floatY=Math.sin(Date.now()/300+p.x)*2;
         const nameY=sy-15+floatY;
-        ctx.font='400 14px "Pixelify Sans","Comic Sans MS",sans-serif';
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle='rgba(26,26,46,0.9)'; ctx.strokeText(p.name,cx2,nameY);
-        ctx.fillStyle=p.name==='Observer'?'#f1c40f':'#ffffff'; ctx.fillText(p.name,cx2,nameY);
 
-        // Bubbles
-        const bubbleY=sy-27+floatY;
-        if(p.isThinking){
-          const thinkEmotes=[1,6,2],idx=thinkEmotes[Math.floor(Date.now()/900)%3],ei=emoteImages[idx];
-          const bw=28,bh=28,bx=cx2-14,by=bubbleY-bh;
-          ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,10); ctx.fill();
-          ctx.strokeStyle='#a4b0be'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
-          ctx.fillStyle='rgba(255,255,255,0.9)';
-          ctx.beginPath(); ctx.arc(cx2-5,bubbleY+2,3,0,Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(cx2-2,bubbleY+6,2,0,Math.PI*2); ctx.fill();
-          if(ei&&ei.complete){ctx.imageSmoothingEnabled=false;ctx.drawImage(ei,bx+(bw-18)/2,by+(bh-18)/2,18,18);ctx.imageSmoothingEnabled=true;}
-        } else if(p.interactionText){
-          const actText=p.interactionText.length>16?p.interactionText.substring(0,16)+'...':p.interactionText;
-          ctx.font='400 12px "Pixelify Sans",sans-serif';
-          const hasIcon=p.interactionIcon&&itemImages[p.interactionIcon];
-          const iconSpace=hasIcon?20:0, pad=10;
-          const bw=ctx.measureText(actText).width+iconSpace+pad*2, bh=28;
-          const bx=cx2-bw/2, by=sy-65+floatY;
-          ctx.fillStyle='rgba(255,248,220,0.97)'; ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,8); ctx.fill();
-          ctx.strokeStyle='#e67e22'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
-          ctx.fillStyle='rgba(255,248,220,0.97)'; ctx.beginPath(); ctx.moveTo(cx2-4,by+bh); ctx.lineTo(cx2+4,by+bh); ctx.lineTo(cx2,by+bh+6); ctx.closePath(); ctx.fill();
-          ctx.strokeStyle='#e67e22'; ctx.lineWidth=1.5/camera.zoom; ctx.stroke();
-          let tx=bx+pad;
-          if(hasIcon){const ii=itemImages[p.interactionIcon];if(ii.complete){ctx.imageSmoothingEnabled=false;ctx.drawImage(ii,bx+pad,by+(bh-16)/2,16,16);ctx.imageSmoothingEnabled=true;}tx+=iconSpace;}
-          ctx.font='400 12px "Pixelify Sans",sans-serif'; ctx.fillStyle='#8B5E14'; ctx.textAlign='left';
-          ctx.fillText(actText,tx,by+bh/2+1); ctx.textAlign='center';
-        } else if(p.message){
-          const msg=p.message.length>30?p.message.substring(0,30)+'...':p.message;
-          ctx.font='400 14px "Pixelify Sans",sans-serif';
-          const bw=ctx.measureText(msg).width+32,bh=30,bx=cx2-bw/2,by=sy-65+floatY;
-          ctx.fillStyle='white'; ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,8); ctx.fill();
-          ctx.strokeStyle='#8ecf7e'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
-          ctx.fillStyle='#5c4a3d'; ctx.fillText(msg,cx2,by+bh/2);
-        }
+        ctx.restore();
+
+        actorOverlays.push(() => {
+          ctx.save();
+          ctx.globalAlpha=actorAlpha;
+
+          if(selectedPlayerId&&p.id===selectedPlayerId){
+            ctx.strokeStyle=`rgba(116,185,255,${0.5+0.3*Math.sin(Date.now()/300)})`;
+            ctx.lineWidth=2/camera.zoom;
+            ctx.beginPath(); ctx.roundRect(sx-3,sy-13,TILE_SIZE*1.2+6,TILE_SIZE*1.2+6,6); ctx.stroke();
+            const ay=sy-22+Math.sin(Date.now()/400)*3;
+            ctx.fillStyle='#74b9ff'; ctx.beginPath(); ctx.moveTo(cx2-4,ay); ctx.lineTo(cx2+4,ay); ctx.lineTo(cx2,ay+5); ctx.closePath(); ctx.fill();
+          }
+
+          ctx.font='400 14px "Pixelify Sans","Comic Sans MS",sans-serif';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle=idle?'rgba(26,26,46,0.55)':'rgba(26,26,46,0.9)'; ctx.strokeText(p.name,cx2,nameY);
+          ctx.fillStyle=p.name==='Observer'?'#f1c40f':(idle?'rgba(255,255,255,0.72)':'#ffffff'); ctx.fillText(p.name,cx2,nameY);
+
+          const bubbleY=sy-27+floatY;
+          if(p.isThinking){
+            const thinkEmotes=[1,6,2],idx=thinkEmotes[Math.floor(Date.now()/900)%3],ei=emoteImages[idx];
+            const bw=28,bh=28,bx=cx2-14,by=bubbleY-bh;
+            ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,10); ctx.fill();
+            ctx.strokeStyle='#a4b0be'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
+            ctx.fillStyle='rgba(255,255,255,0.9)';
+            ctx.beginPath(); ctx.arc(cx2-5,bubbleY+2,3,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx2-2,bubbleY+6,2,0,Math.PI*2); ctx.fill();
+            if(ei&&ei.complete){ctx.imageSmoothingEnabled=false;ctx.drawImage(ei,bx+(bw-18)/2,by+(bh-18)/2,18,18);ctx.imageSmoothingEnabled=true;}
+          } else if(p.interactionText){
+            const actText=p.interactionText.length>16?p.interactionText.substring(0,16)+'...':p.interactionText;
+            ctx.font='400 12px "Pixelify Sans",sans-serif';
+            const hasIcon=p.interactionIcon&&itemImages[p.interactionIcon];
+            const iconSpace=hasIcon?20:0, pad=10;
+            const bw=ctx.measureText(actText).width+iconSpace+pad*2, bh=28;
+            const bx=cx2-bw/2, by=sy-65+floatY;
+            ctx.fillStyle='rgba(255,248,220,0.97)'; ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,8); ctx.fill();
+            ctx.strokeStyle='#e67e22'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
+            ctx.fillStyle='rgba(255,248,220,0.97)'; ctx.beginPath(); ctx.moveTo(cx2-4,by+bh); ctx.lineTo(cx2+4,by+bh); ctx.lineTo(cx2,by+bh+6); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle='#e67e22'; ctx.lineWidth=1.5/camera.zoom; ctx.stroke();
+            let tx=bx+pad;
+            if(hasIcon){const ii=itemImages[p.interactionIcon];if(ii.complete){ctx.imageSmoothingEnabled=false;ctx.drawImage(ii,bx+pad,by+(bh-16)/2,16,16);ctx.imageSmoothingEnabled=true;}tx+=iconSpace;}
+            ctx.font='400 12px "Pixelify Sans",sans-serif'; ctx.fillStyle='#8B5E14'; ctx.textAlign='left';
+            ctx.fillText(actText,tx,by+bh/2+1); ctx.textAlign='center';
+          } else if(p.message){
+            const msg=p.message.length>30?p.message.substring(0,30)+'...':p.message;
+            ctx.font='400 14px "Pixelify Sans",sans-serif';
+            const bw=ctx.measureText(msg).width+32,bh=30,bx=cx2-bw/2,by=sy-65+floatY;
+            ctx.fillStyle='white'; ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,8); ctx.fill();
+            ctx.strokeStyle='#8ecf7e'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
+            ctx.fillStyle='#5c4a3d'; ctx.fillText(msg,cx2,by+bh/2);
+          }
+
+          ctx.restore();
+        });
       });
 
-      // 3. Top layers
+      // 3. 最后再盖上顶部图层，形成树冠/屋檐遮挡效果。
       ['Nature','Building','BuildingTop'].forEach(name=>{
         const l=mapData.layers.find(l=>l.type==='tilelayer'&&l.name===name&&l.visible);
         if(l) for(let i=0;i<l.data.length;i++) drawTile(l.data[i],i%mapData.width,Math.floor(i/mapData.width));
@@ -1032,11 +814,13 @@
       drawParticlesOfType('leaf');
       drawParticlesOfType('firefly');
 
-      // Day/night overlay (covers viewport in world space)
+      actorOverlays.forEach(drawOverlay => drawOverlay());
+
+      // 昼夜遮罩覆盖的是世界视口，而不是整张地图。
       const ov=getDayNightOverlay();
       if(ov.a>0){ ctx.fillStyle=`rgba(${ov.r},${ov.g},${ov.b},${ov.a})`; ctx.fillRect(camera.x,camera.y,VIEWPORT_W/camera.zoom,VIEWPORT_H/camera.zoom); }
 
-      // Zone hover tooltip
+      // 鼠标提示只在世界坐标层判定，避免缩放后命中偏移。
       const zl=mapData.layers.find(l=>l.type==='objectgroup');
       if(zl&&zl.objects&&mouseX>=0){
         zl.objects.forEach(zone=>{
@@ -1052,11 +836,11 @@
         });
       }
 
-      // Restore to screen space
+      // 恢复到屏幕坐标后再绘制界面层，避免被镜头缩放影响。
       ctx.restore();
       ctx.imageSmoothingEnabled=true;
 
-      // === Screen-space: detect hovered player ===
+      // === 屏幕坐标层：检测玩家悬停 ===
       hoveredPlayerId=null;
       for(const id in clientPlayers){
         const p=clientPlayers[id]; if(p.name==='Observer') continue;
@@ -1065,7 +849,7 @@
         if(mouseScreenX>=spx&&mouseScreenX<=spx+pw2&&mouseScreenY>=spy-10*camera.zoom&&mouseScreenY<=spy+ph2){ hoveredPlayerId=id; break; }
       }
 
-      // Draw hover card
+      // 悬浮卡最后绘制，确保压在所有世界元素之上。
       if(hoveredPlayerId&&clientPlayers[hoveredPlayerId]){
         const p=clientPlayers[hoveredPlayerId];
         const spx=(p.displayX-camera.x)*camera.zoom+TILE_SIZE*camera.zoom/2;
@@ -1075,7 +859,7 @@
     }
 
     // ==========================================
-    // === drawParticlesOfType() ===
+    // === 按类型绘制粒子 ===
     // ==========================================
     function drawParticlesOfType(type){
       for(const p of particles){
@@ -1099,7 +883,7 @@
     }
 
     // ==========================================
-    // === drawMinimap() ===
+    // === 绘制小地图 ===
     // ==========================================
     function drawMinimap(){
       if(!mapData) return;
@@ -1117,7 +901,7 @@
           if(n.includes('paved')||n.includes('road')) return;
           const zx=zone.x*ts*scale,zy=zone.y*ts*scale;
           const zw=Math.max((zone.width||20)*ts*scale,4),zh=Math.max((zone.height||20)*ts*scale,4);
-          // Highlight selected player's zone
+          // 小地图同步强调当前跟随目标所在区域。
           if(selectedPlayerId&&clientPlayers[selectedPlayerId]&&clientPlayers[selectedPlayerId].currentZoneName===zone.name){
             miniCtx.fillStyle='rgba(116,185,255,0.5)'; miniCtx.fillRect(zx,zy,zw,zh);
             miniCtx.strokeStyle='#74b9ff'; miniCtx.lineWidth=1.5; miniCtx.strokeRect(zx,zy,zw,zh);
@@ -1132,17 +916,19 @@
         });
       }
 
-      // Player dots
+      // 玩家点位与名字同时显示，方便在缩略图里快速定位。
       for(const id in clientPlayers){
         const p=clientPlayers[id];
         const px=p.displayX*scale+2,py=p.displayY*scale+2;
         miniCtx.beginPath(); miniCtx.arc(px,py,id===selectedPlayerId?4:3,0,Math.PI*2);
+        miniCtx.globalAlpha=isPlayerIdle(p)?0.45:1;
         miniCtx.fillStyle=id===selectedPlayerId?'#74b9ff':(p.name==='Observer'?'#f1c40f':'#e74c3c'); miniCtx.fill();
+        miniCtx.globalAlpha=1;
         miniCtx.font='bold 8px "Pixelify Sans",sans-serif'; miniCtx.fillStyle='#fff'; miniCtx.textAlign='center';
         miniCtx.fillText(p.name,px,py-6);
       }
 
-      // Viewport rectangle
+      // 当前视口边框能帮助理解主画布正在看地图的哪一块。
       const vx=camera.x*scale,vy=camera.y*scale;
       const vw=(VIEWPORT_W/camera.zoom)*scale,vh=(VIEWPORT_H/camera.zoom)*scale;
       miniCtx.strokeStyle='rgba(255,255,255,0.65)'; miniCtx.lineWidth=1;
@@ -1150,7 +936,7 @@
     }
 
     // ==========================================
-    // === Chat log ===
+    // === 聊天日志 ===
     // ==========================================
     function addChatMessage(name,message,timestamp){
       chatMessages.push({type:'chat',name,message,time:timestamp||Date.now()});
@@ -1177,7 +963,7 @@
     function escapeHtml(text){ const d=document.createElement('div'); d.textContent=text||''; return d.innerHTML; }
 
     // ==========================================
-    // === AI Panel ===
+    // === AI 面板 ===
     // ==========================================
     function updateAiPanel(){
       const players=Object.values(clientPlayers).filter(p=>p.name!=='Observer');
@@ -1193,7 +979,9 @@
         ac.style.width=avatarSize+'px'; ac.style.height=avatarSize+'px'; ac.style.display='block'; ac.style.flexShrink='0';
         const si=(p.sprite&&characterImages[p.sprite])?characterImages[p.sprite]:images['player'];
         if(si&&si.complete){const actx=ac.getContext('2d');actx.imageSmoothingEnabled=false;actx.drawImage(si,0,0,si.width/4,si.height/4,0,0,16,16);}
-        card.innerHTML=`<div class="ai-info"><div class="ai-name">${escapeHtml(p.name)}</div><div class="ai-zone">${escapeHtml(p.currentZoneName||'小镇街道')}</div></div><div class="ai-status-dot ${p.isThinking?'thinking':'idle'}"></div>`;
+        const statusClass=p.isThinking?'thinking':(isPlayerIdle(p)?'idle':'active');
+        const statusLabel=p.isThinking?'Thinking':(isPlayerIdle(p)?'Inactive':'Active');
+        card.innerHTML=`<div class="ai-info"><div class="ai-name">${escapeHtml(p.name)}</div><div class="ai-zone">${escapeHtml(p.currentZoneName||'小镇街道')}</div></div><div class="ai-status-dot ${statusClass}" title="${statusLabel}"></div>`;
         card.prepend(ac);
         card.addEventListener('click',()=>{
           if(selectedPlayerId===p.id){ selectedPlayerId=null; isCameraFollowing=false; activityDetailEl.classList.remove('visible'); }
@@ -1218,7 +1006,7 @@
     }
 
     // ==========================================
-    // === Stats Panel ===
+    // === 统计面板 ===
     // ==========================================
     function updateStatsPanel(){
       const el=document.getElementById('stats-content'); if(!el) return;
@@ -1242,9 +1030,5 @@
     }
     setInterval(updateStatsPanel, 3000);
 
-    // Boot
+    // 页面脚本只启动一次，真正的重连交给 EventSource 自己处理。
     initialize();
-  </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
-</html>

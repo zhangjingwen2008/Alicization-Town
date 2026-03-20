@@ -1,0 +1,66 @@
+const {
+  TOKEN_TTL_MS,
+  LEASE_TTL_MS,
+  HEARTBEAT_INTERVAL_MS,
+  LOGIN_PROOF_TTL_MS,
+  STORAGE_ROOT,
+} = require('./config');
+const {
+  listProfiles,
+  loadProfile,
+  saveProfile,
+  getDefaultProfileName,
+  setDefaultProfileName,
+} = require('./storage');
+const { requestJson, discoverServer } = require('./http-client');
+const {
+  SessionHandle,
+  login,
+  heartbeat,
+  ensureOnline,
+  runAuthenticated,
+  logoutProfile,
+} = require('./session-handle');
+const {
+  stringifyResult,
+  formatProfilesList,
+  formatLogin,
+  formatCharacters,
+  formatMap,
+  formatLook,
+  formatWalk,
+  formatSay,
+  formatInteract,
+  parseFlags,
+} = require('./formatters');
+
+module.exports = {
+  SessionHandle,
+  TOKEN_TTL_MS,
+  LEASE_TTL_MS,
+  HEARTBEAT_INTERVAL_MS,
+  LOGIN_PROOF_TTL_MS,
+  STORAGE_ROOT,
+  listProfiles,
+  loadProfile,
+  saveProfile,
+  getDefaultProfileName,
+  setDefaultProfileName,
+  discoverServer,
+  login,
+  heartbeat,
+  ensureOnline,
+  runAuthenticated,
+  logoutProfile,
+  requestJson,
+  stringifyResult,
+  formatProfilesList,
+  formatLogin,
+  formatCharacters,
+  formatMap,
+  formatLook,
+  formatWalk,
+  formatSay,
+  formatInteract,
+  parseFlags,
+};

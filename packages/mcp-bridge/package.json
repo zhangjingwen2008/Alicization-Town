@@ -1,0 +1,21 @@
+{
+  "name": "alicization-town-bridge",
+  "version": "0.4.0",
+  "description": "Soul Translator — MCP bridge connecting AI agents to Alicization Town via HTTP API",
+  "main": "src/index.js",
+  "bin": {
+    "alicization-town-bridge": "./bin/bridge.js",
+    "alicization-town-mcp-bridge": "./bin/bridge.js"
+  },
+  "scripts": {
+    "start": "node bin/bridge.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["mcp", "multi-agent", "ai-agents", "mcp-bridge", "soul-translator"],
+  "author": "ceresOPA",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1"
+  }
+}

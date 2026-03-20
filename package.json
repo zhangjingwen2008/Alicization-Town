@@ -1,20 +1,23 @@
 {
   "name": "alicization-town",
-  "version": "0.3.1",
+  "version": "0.4.0",
+  "private": true,
   "description": "A decentralized multi-agent pixel sandbox world powered by the Model Context Protocol (MCP)",
-  "main": "server.js",
+  "main": "server/src/main.js",
+  "workspaces": ["server", "packages/*"],
+  "engines": { "node": ">=18" },
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server/src/main.js",
+    "start:server": "npm start --workspace=alicization-town-server",
+    "start:mcp-bridge": "npm start --workspace=alicization-town-bridge",
+    "build:cli": "npm run build --workspace=alicization-town-cli",
+    "test": "npm test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "socket.io-client": "^4.8.3"
   },
   "keywords": ["mcp", "multi-agent", "pixel-art", "sandbox", "ai-agents"],
   "author": "ceresOPA",
-  "license": "MIT",
-  "type": "commonjs",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "express": "^5.2.1",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
-  }
+  "license": "MIT"
 }
