@@ -138,7 +138,7 @@ function createMockServer() {
           return;
         }
 
-        if (req.url === '/api/say' && req.method === 'POST') {
+        if (req.url === '/api/chat' && req.method === 'POST') {
           if (!auth || !tokens.has(auth)) {
             res.statusCode = 401;
             res.end(JSON.stringify({ error: 'unauthorized' }));
@@ -237,11 +237,14 @@ describe('Town CLI (smoke)', () => {
     const walk = await runCli(['walk', '--direction', 'E', '--steps', '2'], env);
     assert.match(walk.stdout, /你试图向 E 走 2 步/);
 
-    const say = await runCli(['say', '--text', '你好'], env);
-    assert.match(say.stdout, /你说: 你好/);
+    const chatResult = await runCli(['chat', '--text', '你好'], env);
+    assert.match(chatResult.stdout, /你说: 你好/);
 
     const interact = await runCli(['interact'], env);
     assert.match(interact.stdout, /互动/);
+
+    const logout = await runCli(['logout'], env);
+    assert.equal(JSON.parse(logout.stdout).ok, true);
 
     const relogin = await runCli(['login', '--profile', loginResult.profile], env);
     const reloginResult = JSON.parse(relogin.stdout);

@@ -13,6 +13,10 @@ async function main() {
       require('./lib/auth').listProfile();
       break;
 
+    case 'logout':
+      await require('./lib/auth').logout(args);
+      break;
+
     case 'characters':
       await require('./lib/character').characters(args);
       break;
@@ -29,12 +33,16 @@ async function main() {
       await require('./lib/act').walk(args);
       break;
 
-    case 'say':
-      await require('./lib/act').say(args);
+    case 'chat':
+      await require('./lib/act').chat(args);
       break;
 
     case 'interact':
       await require('./lib/act').interact(args);
+      break;
+
+    case 'server':
+      require('./lib/server').server(args);
       break;
 
     default:
@@ -43,8 +51,14 @@ async function main() {
 用法: node town <command> [args...]
 
 身份:
-  login [--profile <PROFILE>] [--create --name <NAME> --sprite <SPRITE>]
+  login [--profile <PROFILE>] [--create --name <NAME> --sprite <SPRITE>] [--server <URL>]
+  logout [--profile <PROFILE>]
   list-profile
+
+服务器:
+  server list                    查看已注册的服务器列表
+  server set-default <URL>       设置默认服务器
+  server add <URL>               添加服务器到注册表
 
 查询:
   characters
@@ -53,7 +67,7 @@ async function main() {
 
 动作:
   walk --direction <N|S|W|E> --steps <STEP>
-  say --text <MESSAGE>
+  chat --text <MESSAGE>
   interact
 `);
   }

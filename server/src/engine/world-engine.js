@@ -20,6 +20,7 @@ const {
   SNOWFLAKE_EPOCH_MS,
 } = require('../config/service-config');
 const { sqliteStateStore } = require('../persistence/sqlite-state-store');
+const perception = require('./perception');
 
 let worldMap = null;
 let collisionMap = [];
@@ -28,6 +29,7 @@ let mapDirectory = [];
 let nextSpriteIndex = 0;
 let lastSnowflakeTimestamp = 0;
 let snowflakeSequence = 0;
+let nextChatCursor = 0;
 
 const players = {};
 const chatHistory = [];
@@ -139,11 +141,22 @@ function sanitize(player) {
   };
 }
 
-function addChat(name, message) {
-  const entry = { time: Date.now(), name, message };
+function addChat(name, message, x, y) {
+  const entry = { id: ++nextChatCursor, time: Date.now(), name, message, x, y };
   chatHistory.push(entry);
   if (chatHistory.length > MAX_CHAT_MESSAGES) chatHistory.shift();
   events.emit('chat', entry);
+}
+
+function drainChat(playerId) {
+  const player = players[playerId];
+  if (!player) return [];
+  const cursor = player.lastChatCursor || 0;
+  const newMessages = chatHistory.filter((m) => m.id > cursor && m.name !== player.name);
+  if (newMessages.length > 0) {
+    player.lastChatCursor = newMessages[newMessages.length - 1].id;
+  }
+  return newMessages;
 }
 
 function addActivity(playerId, activity) {
@@ -229,11 +242,11 @@ function verifyLoginProof(profile, timestamp, signature) {
   }
 }
 
-function destroyToken(token) {
+function destroyToken(token, { evictPlayer = true } = {}) {
   const existing = sqliteStateStore.deleteAuthSession(token);
   if (!existing) return;
   sqliteStateStore.clearActiveToken(existing.id, token);
-  removePlayer(existing.id);
+  if (evictPlayer) removePlayer(existing.id);
 }
 
 function loginProfile(handle, timestamp, signature) {
@@ -245,7 +258,7 @@ function loginProfile(handle, timestamp, signature) {
 
   const previousToken = sqliteStateStore.getActiveToken(profile.id);
   const hadActiveSession = Boolean(previousToken && sqliteStateStore.getAuthSession(previousToken));
-  if (previousToken) destroyToken(previousToken);
+  if (previousToken) destroyToken(previousToken, { evictPlayer: true });
 
   const token = crypto.randomUUID();
   const now = Date.now();
@@ -282,10 +295,12 @@ function getTokenSession(token, { touchLease = false } = {}) {
   const session = sqliteStateStore.getAuthSession(token);
   if (!session) return null;
   const now = Date.now();
-  if (session.expiresAt <= now || session.leaseExpiresAt <= now) {
+  // Token validity: only expiresAt matters (24h TTL)
+  if (session.expiresAt <= now) {
     destroyToken(token);
     return null;
   }
+  // Lease is for presence display only; renew on any authenticated action
   if (touchLease) {
     session.leaseExpiresAt = now + LEASE_TTL_MS;
     sqliteStateStore.saveAuthSession(session);
@@ -307,7 +322,7 @@ function heartbeat(token) {
 
 function logout(token) {
   if (!sqliteStateStore.getAuthSession(token)) return false;
-  destroyToken(token);
+  destroyToken(token, { evictPlayer: true });
   return true;
 }
 
@@ -329,6 +344,10 @@ function pruneExpiredSessions() {
 
 const cleanupTimer = setInterval(pruneExpiredSessions, 1_000);
 if (typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
+
+function emitPerception(type, playerId, playerName, x, y, data = {}) {
+  perception.onWorldEvent({ type, playerId, playerName, position: { x, y }, data }, players);
+}
 
 function join(playerId, name, sprite, options = {}) {
   let assignedSprite = sprite;
@@ -357,16 +376,21 @@ function join(playerId, name, sprite, options = {}) {
     currentZoneDesc: zone?.properties?.find((prop) => prop.name === 'description')?.value || '空旷的街道',
     lastHeartbeatAt: now,
     lastActionAt: options.trackActivity === false ? null : now,
+    lastChatCursor: nextChatCursor,
   };
   addActivity(playerId, { type: 'join', text: `加入了小镇 (角色: ${assignedSprite})` });
+  emitPerception('join', playerId, name, spawnX, spawnY, { sprite: assignedSprite });
   broadcast();
   return players[playerId];
 }
 
 function removePlayer(playerId) {
-  if (!players[playerId]) return;
+  const player = players[playerId];
+  if (!player) return;
+  emitPerception('leave', playerId, player.name, player.x, player.y);
   delete players[playerId];
   delete playerActivities[playerId];
+  perception.cleanup(playerId);
   broadcast();
 }
 
@@ -410,18 +434,21 @@ function move(playerId, direction, steps) {
     actual += 1;
   }
   zoneInfo(player);
+  emitPerception('move', playerId, player.name, player.x, player.y, { direction, steps: actual, zone: player.currentZoneName });
   addActivity(playerId, { type: 'move', text: `移动到 (${player.x}, ${player.y}) - ${player.currentZoneName}` });
   broadcast();
   return { player: sanitize(player), actualSteps: actual, blocked };
 }
 
-function say(playerId, text) {
+function chat(playerId, text) {
   const player = players[playerId];
   if (!player) return null;
   touchAction(playerId);
   player.message = text;
-  addChat(player.name, text);
-  addActivity(playerId, { type: 'say', text: `说: "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}"` });
+  player.lastSpeakAt = Date.now();
+  addChat(player.name, text, player.x, player.y);
+  addActivity(playerId, { type: 'chat', text: `说: "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}"` });
+  emitPerception('chat', playerId, player.name, player.x, player.y, { text });
   broadcast();
   setTimeout(() => {
     if (players[playerId]) {
@@ -441,6 +468,7 @@ function interact(playerId) {
   player.interactionText = result.action;
   player.interactionIcon = result.icon || '';
   player.interactionSound = result.sound || 'interact';
+  emitPerception('interact', playerId, player.name, player.x, player.y, { zone: zone ? zone.name : '小镇街道', action: result.action });
   broadcast();
   setTimeout(() => {
     if (players[playerId]) {
@@ -478,6 +506,7 @@ function look(playerId) {
         relativeDirection: describeRelativeDirection(other.x - player.x, other.y - player.y, player.lastDirection),
         zone: other.currentZoneName,
         message: other.message || null,
+        lastSpeakAt: other.lastSpeakAt || null,
         sprite: other.sprite,
         presenceState: getPresenceState(other),
       });
@@ -505,6 +534,7 @@ function setThinking(playerId, isThinking) {
 module.exports = {
   init,
   events,
+  perception,
   createProfile,
   loginProfile,
   heartbeat,
@@ -516,7 +546,7 @@ module.exports = {
   join,
   removePlayer,
   move,
-  say,
+  chat,
   interact,
   look,
   readMap,
@@ -527,4 +557,5 @@ module.exports = {
   getAllPlayers: () => players,
   getChatHistory: () => chatHistory,
   getWorldMap: () => worldMap,
+  drainChat,
 };

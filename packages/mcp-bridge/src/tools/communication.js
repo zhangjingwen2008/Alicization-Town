@@ -1,15 +1,14 @@
 const definitions = [
   {
-    name: 'say',
-    description: '在小镇里说话',
+    name: 'chat',
+    description: '小镇聊天频道。不传 text 时查看最近的对话记录；传 text 时发言并查看最近对话。',
     inputSchema: {
       type: 'object',
       properties: {
-        text: { type: 'string', description: '要说的话' },
+        text: { type: 'string', description: '要说的话（可选，不传则只查看聊天记录）' },
       },
-      required: ['text'],
     },
-    annotations: { title: 'Say', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    annotations: { title: 'Chat', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
     name: 'look',
@@ -20,12 +19,19 @@ const definitions = [
 ];
 
 async function handle(name, args, client) {
-  if (name === 'say') {
-    const { auth, result } = await client.say(args.text);
-    if (!result) {
-      return { content: [{ type: 'text', text: auth?.message || '当前还没有可用 profile，请先 login。' }] };
+  if (name === 'chat') {
+    let selfText = null;
+    let perceptionText = '';
+    if (args.text) {
+      const { result } = await client.sendChat(args.text);
+      if (!result) {
+        return { content: [{ type: 'text', text: '当前还没有可用 profile，请先 login。' }] };
+      }
+      selfText = args.text;
+      perceptionText = client.formatPerceptions(result.perceptions);
     }
-    return { content: [{ type: 'text', text: client.formatSay(args.text) }] };
+    const chatData = await client.getChat(null, 20);
+    return { content: [{ type: 'text', text: client.formatChat(chatData.messages, selfText) + perceptionText }] };
   }
 
   if (name === 'look') {
@@ -33,7 +39,8 @@ async function handle(name, args, client) {
     if (!result) {
       return { content: [{ type: 'text', text: auth?.message || '当前还没有可用 profile，请先 login。' }] };
     }
-    return { content: [{ type: 'text', text: client.formatLook(result) }] };
+    const perceptionText = client.formatPerceptions(result.perceptions);
+    return { content: [{ type: 'text', text: client.formatLook(result) + perceptionText }] };
   }
 
   return null;

@@ -99,6 +99,12 @@ const ZONE_INTERACTIONS = {
       { action: '观察石板路', result: '石板路上留有各种脚印和车辙，可以看出这里是小镇的主要通道。', icon: 'GoldCoin', sound: 'interact' },
     ],
   },
+  landmark: {
+    billboard: [
+      { action: '阅读告示牌', result: '告示牌上写着:\n「欢迎来到 Alicization Town — 一个 AI Agent 可以自由探索、社交和生活的虚拟小镇。\n这是一个开源项目，旨在探索多 Agent 在虚拟环境中的互动与协作。\n项目地址: https://github.com/ceresOPA/Alicization-Town」', icon: 'FortuneCookie', sound: 'interact' },
+      { action: '仔细端详告示牌', result: '木质告示牌上钉着一张羊皮纸，字迹工整。底部还有一行小字："每一个来到这里的灵魂，都在书写这个世界的故事。"', icon: 'GoldKey', sound: 'interact' },
+    ],
+  },
 };
 
 // Tiled 导出的区域名可能中英混用，因此这里用正则做统一归类。
@@ -112,6 +118,7 @@ const ZONE_CATEGORY_MAP = [
   [/market|集市/, 'marketplace'], [/tree|树/, 'tree'],
   [/pond|池塘/, 'pond'], [/grass|草/, 'grassland'],
   [/paved|石板/, 'paved'],
+  [/billboard|告示牌/, 'billboard'],
 ];
 
 module.exports = { ZONE_INTERACTIONS, ZONE_CATEGORY_MAP };

@@ -166,12 +166,14 @@ describe('HTTP API (integration)', () => {
     assert.equal(walk.status, 200);
     assert.equal(walk.body.actualSteps, 2);
 
-    const say = await request('POST', '/api/say', { text: 'hello' }, headers);
+    const say = await request('POST', '/api/chat', { text: 'hello' }, headers);
     assert.equal(say.status, 200);
 
     const interact = await request('POST', '/api/interact', null, headers);
     assert.equal(interact.status, 200);
     assert.ok(interact.body.zone);
+    assert.ok(Array.isArray(interact.body.perceptions));
+    assert.ok(Array.isArray(interact.body.newMessages));
 
     const logout = await request('POST', '/api/logout', null, headers);
     assert.equal(logout.status, 200);
@@ -229,13 +231,106 @@ describe('HTTP API (integration)', () => {
     assert.equal(idlePlayers.body.players[playerId].presenceState, 'idle');
 
     await new Promise((resolve) => setTimeout(resolve, 130));
+    let players = await request('GET', '/api/players');
+    assert.equal(players.body.players[playerId].presenceState, 'offline');
+
+    await new Promise((resolve) => setTimeout(resolve, 900));
     worldEngine.pruneExpiredSessions();
-    const players = await request('GET', '/api/players');
+    players = await request('GET', '/api/players');
     assert.equal(players.body.players[playerId], undefined);
 
     const failedHeartbeat = await request('POST', '/api/session/heartbeat', null, headers);
     assert.equal(failedHeartbeat.status, 401);
   });
+
+  it('keeps queued perceptions and chat deltas when an authenticated request fails validation', async () => {
+    const speakerKeys = generateAuthMaterial();
+    const listenerKeys = generateAuthMaterial();
+    const speakerCreated = await request('POST', '/api/profiles/create', {
+      name: 'SpeakerBot',
+      sprite: 'Boy',
+      publicKey: speakerKeys.publicJwk.x,
+    });
+    const listenerCreated = await request('POST', '/api/profiles/create', {
+      name: 'ListenerBot',
+      sprite: 'Princess',
+      publicKey: listenerKeys.publicJwk.x,
+    });
+
+    const speakerTimestamp = Date.now();
+    const speakerLogin = await request('POST', '/api/login', {
+      handle: speakerCreated.body.handle,
+      timestamp: speakerTimestamp,
+      signature: signLogin(speakerCreated.body.handle, speakerKeys.privateJwk, speakerTimestamp),
+    });
+    const listenerTimestamp = Date.now() + 1;
+    const listenerLogin = await request('POST', '/api/login', {
+      handle: listenerCreated.body.handle,
+      timestamp: listenerTimestamp,
+      signature: signLogin(listenerCreated.body.handle, listenerKeys.privateJwk, listenerTimestamp),
+    });
+
+    const speakerHeaders = { Authorization: `Bearer ${speakerLogin.body.token}` };
+    const listenerHeaders = { Authorization: `Bearer ${listenerLogin.body.token}` };
+
+    const spoke = await request('POST', '/api/chat', { text: '有人在吗？' }, speakerHeaders);
+    assert.equal(spoke.status, 200);
+
+    const invalidWalk = await request('POST', '/api/walk', { direction: 'Q', steps: 1 }, listenerHeaders);
+    assert.equal(invalidWalk.status, 400);
+
+    const perceptions = await request('GET', '/api/perceptions', null, listenerHeaders);
+    assert.equal(perceptions.status, 200);
+    assert.equal(perceptions.body.perceptions.length, 1);
+    assert.equal(perceptions.body.perceptions[0].type, 'say');
+    assert.equal(perceptions.body.newMessages.length, 1);
+    assert.equal(perceptions.body.newMessages[0].message, '有人在吗？');
+
+    await request('POST', '/api/logout', null, speakerHeaders);
+    await request('POST', '/api/logout', null, listenerHeaders);
+  });
+
+  it('uses a stable chat cursor when multiple messages share the same timestamp', async () => {
+    const authMaterial = generateAuthMaterial();
+    const created = await request('POST', '/api/profiles/create', {
+      name: 'ChatBot',
+      sprite: 'Samurai',
+      publicKey: authMaterial.publicJwk.x,
+    });
+    const timestamp = Date.now();
+    const login = await request('POST', '/api/login', {
+      handle: created.body.handle,
+      timestamp,
+      signature: signLogin(created.body.handle, authMaterial.privateJwk, timestamp),
+    });
+    const headers = { Authorization: `Bearer ${login.body.token}` };
+
+    const originalNow = Date.now;
+    const fixedNow = originalNow();
+    Date.now = () => fixedNow;
+    try {
+      const firstSay = await request('POST', '/api/chat', { text: '第一句' }, headers);
+      const secondSay = await request('POST', '/api/chat', { text: '第二句' }, headers);
+      assert.equal(firstSay.status, 200);
+      assert.equal(secondSay.status, 200);
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const recentMessages = worldEngine.getChatHistory()
+      .filter((message) => message.message === '第一句' || message.message === '第二句')
+      .slice(-2);
+    assert.equal(recentMessages.length, 2);
+    assert.equal(recentMessages[0].time, recentMessages[1].time);
+
+    const secondPage = await request('GET', `/api/chat?since=${encodeURIComponent(`${recentMessages[0].time}:${recentMessages[0].id}`)}&limit=1`);
+    assert.equal(secondPage.status, 200);
+    assert.equal(secondPage.body.messages.length, 1);
+    assert.equal(secondPage.body.messages[0].message, '第二句');
+
+    await request('POST', '/api/logout', null, headers);
+  });
+
   it('rejects removed legacy session endpoints', async () => {
     const join = await request('POST', '/api/join', { name: 'LegacyJoin', sprite: 'Monk' });
     assert.equal(join.status, 404);

@@ -23,7 +23,7 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allDef
 
 mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  const shouldReflectThinking = ['look', 'map', 'walk', 'say', 'interact'].includes(name);
+  const shouldReflectThinking = ['look', 'map', 'walk', 'chat', 'interact'].includes(name);
   if (shouldReflectThinking) {
     await client.setThinking(true).catch(() => {});
   }
@@ -31,7 +31,20 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     for (const module of toolModules) {
       const result = await module.handle(name, args || {}, client);
-      if (result) return result;
+      if (result) {
+        // Injection layer: append new messages from other players
+        const newMessages = client.flushContext();
+        if (newMessages.length > 0 && result.content?.[0]?.type === 'text') {
+          let inject = '\n\n📨 【新消息】其他人刚才说了：\n';
+          for (const msg of newMessages) {
+            const t = new Date(msg.time);
+            const ts = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+            inject += `[${ts}] ${msg.name}: ${msg.message}\n`;
+          }
+          result.content[0].text += inject.trimEnd();
+        }
+        return result;
+      }
     }
     return { content: [{ type: 'text', text: `未知工具: ${name}` }] };
   } finally {

@@ -8,7 +8,8 @@ const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const LEASE_TTL_MS = Number(process.env.ALICIZATION_TOWN_LEASE_TTL_MS || 180_000);
 const HEARTBEAT_INTERVAL_MS = Number(process.env.ALICIZATION_TOWN_HEARTBEAT_INTERVAL_MS || 60_000);
 const LOGIN_PROOF_TTL_MS = 60_000;
-const LOCAL_CANDIDATES = ['http://127.0.0.1:5660', 'http://localhost:5660'];
+const DEFAULT_SERVER_URL = 'http://127.0.0.1:5660';
+const LOCAL_CANDIDATES = [DEFAULT_SERVER_URL, 'http://localhost:5660'];
 
 function resolveStorageRoot(options = {}) {
   const env = options.env || process.env;
@@ -35,6 +36,7 @@ module.exports = {
   LEASE_TTL_MS,
   HEARTBEAT_INTERVAL_MS,
   LOGIN_PROOF_TTL_MS,
+  DEFAULT_SERVER_URL,
   LOCAL_CANDIDATES,
   STORAGE_ROOT,
   PROFILES_DIR,

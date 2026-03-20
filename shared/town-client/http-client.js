@@ -2,6 +2,14 @@ const http = require('http');
 const https = require('https');
 const { LOCAL_CANDIDATES } = require('./config');
 
+let _getDefaultServer = null;
+let _resolveServer = null;
+
+function injectRegistry(registry) {
+  _getDefaultServer = registry.getDefaultServer;
+  _resolveServer = registry.resolveServer;
+}
+
 function requestJson(baseUrl, method, apiPath, { body, headers } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(apiPath, baseUrl);
@@ -67,9 +75,16 @@ async function probeServer(baseUrl) {
 
 async function discoverServer(explicitServer) {
   const seen = new Set();
+  // Resolve name → URL if explicitServer looks like a name (no "://")
+  let resolved = explicitServer || null;
+  if (resolved && !resolved.includes('://') && _resolveServer) {
+    resolved = _resolveServer(resolved) || resolved;
+  }
+  const registryDefault = _getDefaultServer ? _getDefaultServer() : null;
   const candidates = [
-    explicitServer || null,
+    resolved,
     process.env.SERVER_URL || null,
+    registryDefault,
     ...LOCAL_CANDIDATES,
   ].filter(Boolean);
 
@@ -88,4 +103,6 @@ async function discoverServer(explicitServer) {
 module.exports = {
   requestJson,
   discoverServer,
+  injectRegistry,
 };
+

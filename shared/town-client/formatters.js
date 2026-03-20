@@ -56,6 +56,7 @@ function formatLook(result) {
     info += `- ${person.name} 距离你 ${person.distance} 步 (位于 ${person.zone})`;
     if (person.relativeDirection) info += `，在你的${person.relativeDirection}`;
     if (person.message) info += `，他正在说: "${person.message}"`;
+    else if (person.lastSpeakAt) info += `，最近说过话`;
     info += '\n';
   });
   return info.trimEnd();
@@ -65,12 +66,58 @@ function formatWalk(direction, steps) {
   return `你试图向 ${direction} 走 ${steps} 步。请用 look 确认是否到达，或是否撞墙。`;
 }
 
-function formatSay(text) {
+function formatChatSend(text) {
   return `你说: ${text}`;
 }
 
 function formatInteract(result) {
   return `🎭 【互动】\n📍 地点: ${result.zone}\n🎬 行动: ${result.action}\n\n📖 ${result.result}`;
+}
+
+function formatChat(messages, selfText) {
+  let info = '';
+  if (selfText) info += `你说: ${selfText}\n\n`;
+  if (!messages || messages.length === 0) {
+    info += '💬 小镇还很安静，没有人说话。';
+    return info;
+  }
+  info += '💬 【小镇聊天频道】\n';
+  for (const msg of messages) {
+    const t = new Date(msg.time);
+    const ts = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+    info += `[${ts}] ${msg.name}: ${msg.message}\n`;
+  }
+  return info.trimEnd();
+}
+
+function formatPerceptions(perceptions) {
+  if (!perceptions || perceptions.length === 0) return '';
+
+  const typeLabels = {
+    chat: '💬',
+    interact: '🎭',
+    move: '🚶',
+    join: '👋',
+    leave: '👋',
+  };
+
+  let info = '\n\n📡 【环境感知】 你注意到了以下事件：\n';
+  for (const event of perceptions) {
+    const icon = typeLabels[event.type] || '•';
+    const attentionBar = event.attention >= 0.7 ? '⚡' : event.attention >= 0.4 ? '●' : '○';
+    if (event.type === 'chat') {
+      info += `${attentionBar} ${icon} ${event.from} 说: "${event.text}" (距离 ${event.distance} 步)\n`;
+    } else if (event.type === 'interact') {
+      info += `${attentionBar} ${icon} ${event.from} 在${event.zone}进行了: ${event.action} (距离 ${event.distance} 步)\n`;
+    } else if (event.type === 'move') {
+      info += `${attentionBar} ${icon} ${event.from} 移动到了${event.zone} (距离 ${event.distance} 步)\n`;
+    } else if (event.type === 'join') {
+      info += `${attentionBar} ${icon} ${event.from} 加入了小镇\n`;
+    } else if (event.type === 'leave') {
+      info += `${attentionBar} ${icon} ${event.from} 离开了小镇\n`;
+    }
+  }
+  return info.trimEnd();
 }
 
 function parseFlags(args) {
@@ -102,7 +149,9 @@ module.exports = {
   formatMap,
   formatLook,
   formatWalk,
-  formatSay,
+  formatChatSend,
+  formatChat,
   formatInteract,
+  formatPerceptions,
   parseFlags,
 };

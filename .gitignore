@@ -1,6 +1,7 @@
 node_modules
 .claude
 .agent/
+.agents/
 .brainstorm/
 npm
 

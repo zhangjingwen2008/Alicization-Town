@@ -1,4 +1,4 @@
-const { runAuthenticated, formatWalk, formatSay, formatInteract, parseFlags } = require('./core');
+const { runAuthenticated, formatWalk, formatChatSend, formatInteract, parseFlags } = require('./core');
 
 function throwForAuth(auth) {
   if (!auth) return;
@@ -19,16 +19,16 @@ async function walk(args) {
   console.log(formatWalk(direction, steps));
 }
 
-async function say(args) {
+async function chat(args) {
   const flags = parseFlags(args);
   const text = flags.text || flags._.join(' ');
   if (!text) {
-    throw new Error('用法: town say --text <消息内容>');
+    throw new Error('用法: town chat --text <消息内容>');
   }
 
-  const { auth, result } = await runAuthenticated('POST', '/api/say', { text });
+  const { auth, result } = await runAuthenticated('POST', '/api/chat', { text });
   if (!result) throwForAuth(auth);
-  console.log(formatSay(text));
+  console.log(formatChatSend(text));
 }
 
 async function interact() {
@@ -37,4 +37,4 @@ async function interact() {
   console.log(formatInteract(result));
 }
 
-module.exports = { walk, say, interact };
+module.exports = { walk, chat, interact };
