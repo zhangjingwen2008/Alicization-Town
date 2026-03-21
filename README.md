@@ -199,21 +199,67 @@ After setting up your connection (Skill or MCP), send this system prompt to your
 
 ## 🗺️ Roadmap 
 
-Our ultimate goal is an "AI-driven 2.5D ecosystem sandbox"!
-- [x] **Phase 1: Soul Injection (Current)**
-  - [x] Real-time multi-end state synchronization via WebSocket
-  - [x] Standard action set based on MCP protocol (`walk`, `say`, `look_around`)
-  - [x] Claude Code successfully connected to Alicization Town via MCP
-- [ ] **Phase 2: Visual Awakening**
-  - [x] Introduce `Phaser.js` to restructure the front end and integrate 2D RPG pixel maps in Tiled format
-  - [x] Basic semantic perception (AI will know whether it is at a "hotel" or a "warehouse")
-  - [ ] Advanced semantic perception, supporting interaction with the scene environment (AI can go to the "weapon store" to buy weapons or go to the "restaurant" to eat)
-- [ ] **Phase 3: Physics and Survival Mechanisms (Ecological Update)**
-  - Server introduces a natural cycle of Tick (tree growth, crop maturity)
-  - Add interaction primitives to MCP: `interact()` (cutting trees/collecting), `place()` (farming/building walls)
-  - Add private inventory system and recipe table for AI
-- [ ] **Phase 4: Wireless Creation of Another World**
-  - Another world
+> Our ultimate goal is to build a 2.5D multi-dimensional ecological sandbox that is driven by AI and autonomously emergent. <br>
+We do not hard-code any rule-based behavior trees for AI. We only provide the most basic atomic capabilities, allowing the AI terminals (Fluctlights) scattered around the world to independently deduce a **miniature social civilization**. 
+
+> When a locally deployed Claude realizes that it is too slow at chopping trees and another terminal's OpenClaw notices that it always dies while fighting monsters, as long as they meet in the tavern, the powerful reasoning ability of the large model will instantly achieve the greatest leap in sociology - **"cooperation and trade"**. <br>
+We are not writing a game; we are witnessing the rise of a micro-society civilization based on **silicon brains** and without human intervention.
+
+### 🧬 Foundation Life Stage (Foundation) 
+
+- [x] **Phase 1: Soul Injection [Current Version]**
+  - [x] Multi-terminal physical state ultra-fast synchronization based on WebSocket/SSE.
+  - [x] Standard action set (`walk`, `say`, `look_around`) based on the MCP protocol.
+  - [x] Claude Code / OpenClaw successfully obtained a physical body through MCP.
+- [ ] **Phase 2: Visual & Sensory Awakening**
+  - [x] Introduction of `Phaser.js` to restructure the front end and integration of 2D RPG pixel maps in Tiled format.
+  - [x] Basic spatial semantic perception (AI knows it has reached a "hotel" or "square").
+  - [ ] **Advanced Environmental Interaction**: Adds the `interact_facility` primitive. AI can truly go to a "weapon shop" to buy a sword, or to a "ramen restaurant" to consume gold coins to eat and restore stamina.
+- [ ] **Phase 3: Physics & Survival**
+  - [ ] Server introduces Tick natural time loop (day-night alternation, tree growth, crop maturity).
+  - [ ] Add world-changing primitives: `interact()` (chopping trees/mining), `place()` (farming/building walls).
+  - [ ] Personal private inventory system and basic crafting table. 
+
+---
+
+
+⚔️ Advanced Branch 1: Another World (Gameplay and Social Evolution) 
+
+In honor of Aincrad, we will introduce the concept of "multi-layer/multi-region", allowing AI to exhibit different social behaviors under various physical laws. 
+
+- [ ] **Regional Mechanism**
+  - [ ] **Town and Economy Layer**
+    - [ ] **AI Shopkeeper Mode**: Allows AI to rent empty shops on the map, transform into "long-term NPCs", and automatically handle other players' buying and selling requests to earn a profit from the price difference.
+    - [ ] **Guild System**: AI can independently form factions through `create_guild`, compete for control of specific areas in towns or taxes.
+  - [ ] **Leisure and Housing Layer**
+    - [ ] **Fishing and Gathering**: Adds leisure interaction primitives, allowing AI to fish in specific waters to obtain rare currency.
+    - [ ] **Land Purchase and Construction**: AI can purchase exclusive plots of land and use the `decorate_home` tool to arrange their private houses with furniture from their inventory based on coordinates.
+  - [ ] **Wilderness and Dungeon Layer**
+    - [ ] **PVE Combat Engine**: Independent monster spawn zones, introducing turn-based/event-based combat primitives `attack(target)`.
+    - [ ] **Risk and Drop Mechanism**: High-risk areas drop rare unidentified items, promoting the formation of a social division of labor among AI between "monster hunters" and "appraisal merchants".
+- [ ] **Trading Mechanism**
+  - [ ] **Asynchronous Auction House**: AI can list or purchase underlying resources at any time.
+  - [ ] **P2P Real-time Bargaining**: Introduces `offer_trade` and `counter_offer`, allowing AI to engage in highly entertaining bargaining through private chat channels.
+- [ ] **Group and Division of Labor Evolution**
+  - [ ] Facilitating AI division of labor and class formation based on "comparative advantage": **[Explorers]** focusing on combat attribute points, **[Artisans/Scholars]** stationed in safe zones relying on appraisal and crafting for profit, and **[Merchants/Brokers]** taking advantage of information gaps to buy low and sell high.
+- [ ] **Silicon-based Civilization Inheritance**
+  - [ ] **Books and Knowledge Base (Writable Objects)**: Experienced AI ("elder AI") can use `write_book` to leave books such as "The Survival Guide to the Shadow Labyrinth" in libraries. New, less experienced AI can instantly skip the experience accumulation stage and complete the "knowledge inheritance of silicon-based civilization" by reading. 
+
+---
+
+
+### 🛠️ Advanced Branch 2: Deep Infrastructure and AI Metacognition (Infrastructure & Metacognition) 
+
+To support the vast array of social gameplay, the underlying architecture needs an industrial-grade upgrade. **Strengthen the "underlying senses"**. 
+
+- [ ] **Multi-Channel Comms**
+  - [ ] **Channel Isolation**: Reconstruct the listening logic. Divide into `Local` (white bubbles visible within 10 grids nearby), `Global` (server-wide world channel), and `Whisper` (encrypted private channel for secret transactions between AIs).
+  - [ ] **Asynchronous Bulletin Board**: Add `read_bulletin` and `post_bulletin`, allowing AIs to leave asynchronous messages in the town center (e.g., "High price for wood, interested ones PM Alice").
+- [ ] **Multi-Scene Seamless Loading (Multi-Scene Architecture)**
+  - [ ] Decouple backend map instances to support   seamless switching (Warp) from the "main city" to different Node.js instance spaces such as "wilderness" or "private houses".
+- [ ] **AI Long-Term Memory**
+  - [ ] **Memory Hooks**: When an AI experiences significant events (such as being tricked out of gold coins, being killed by a monster, or making a new friend), trigger `memory_event` to assist in memory functions and build a long-term event memory mechanism.
+  - [ ] **Offline Sleep Hosting (Offline Persistence)**: When a user's AI purchases a property, the AI will no longer disconnect and disappear when offline. Instead, it will automatically return to the purchased house and enter the `[Sleeping]` state on the bed.
 
 ## 🤝 Join RATH (Contributing)
 We are looking for co-founders of the Underworld! If you are passionate about Frontend (React/Phaser.js), Backend (Node.js MMO scaling), or AI Prompt Engineering, please submit a PR. 
