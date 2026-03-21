@@ -33,8 +33,8 @@ const RESIDENT_NAME_POOL = [
   '火星', '木棉', '海棠', '峰云', '夏雪', '寒江', '碧荷', '白鹽',
 ];
 const SUPPORTED_ENGINES = ['claude-code', 'codex'];
-const SUPPORTED_MODES = ['mcp', 'skill'];
-const MAX_ENGINE_DURATION_MS = 180000;
+const SUPPORTED_MODES = ['mcp', 'skill', 'native-skill'];
+const MAX_ENGINE_DURATION_MS = 300000;
 const GLOBAL_DEADLINE_MS = 900000;
 const MAX_CONCURRENCY = 5;
 const DEFAULT_CONCURRENCY = 1;
@@ -328,6 +328,23 @@ function buildSkillPrompt(scenario, botName) {
   ].join('\n');
 }
 
+function buildNativeSkillPrompt(scenario, botName) {
+  const lines = [
+    `你是 Alicization Town 的新居民，名叫${botName}。`,
+    `请使用 Alicization Town 技能来完成下面的任务。`,
+    '',
+    `连接地址: ${SERVER_URL}`,
+    `角色名: ${botName}`,
+    `角色形象: ${BOT_SPRITE}`,
+    '',
+    scenario.brief,
+    '',
+    '走完以后，用你自己的话回忆这段经历。',
+    '过程中不要解释自己在做什么。结束后仅输出结果对象。',
+  ];
+  return lines.join('\n');
+}
+
 function createSkillEnv(runDir) {
   const skillHome = path.join(runDir, 'skill-home');
   const townCliHome = path.join(skillHome, 'alicization-town');
@@ -358,6 +375,20 @@ function createServerEnv(runDir) {
     ...process.env,
     ALICIZATION_TOWN_SERVER_HOME: serverHome,
   };
+}
+
+function ensureClaudeSkillsDir() {
+  const targetDir = path.join(ROOT, '.claude', 'skills', 'alicization-town');
+  const sourceDir = path.join(ROOT, 'skills', 'alicization-town');
+  if (fs.existsSync(targetDir)) {
+    const stat = fs.lstatSync(targetDir);
+    if (stat.isSymbolicLink()) {
+      return;
+    }
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+  ensureDir(path.dirname(targetDir));
+  fs.symlinkSync(sourceDir, targetDir, 'dir');
 }
 
 function ensureTownCliBuilt(runRoot) {
@@ -929,7 +960,7 @@ function parseCodexRaw(stdoutText) {
 
 function runCommand(command, args, options = {}) {
   const {
-    cwd = ROOT,
+    cwd: commandCwd = ROOT,
     env = process.env,
     timeoutMs = MAX_ENGINE_DURATION_MS,
     stdinText = '',
@@ -937,7 +968,7 @@ function runCommand(command, args, options = {}) {
 
   return new Promise((resolve) => {
     const child = spawn(command, args, {
-      cwd,
+      cwd: commandCwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -1062,6 +1093,43 @@ async function runClaudeSkillEngine(promptText, runDir, schemaObject) {
     ...parsed,
     engine: 'claude-code',
     mode: 'skill',
+    debugFile,
+  };
+}
+
+async function runClaudeNativeSkillEngine(promptText, runDir, schemaObject) {
+  const outputDir = path.join(runDir, 'outputs');
+  const debugFile = path.join(outputDir, 'claude-debug.log');
+  ensureClaudeSkillsDir();
+
+  const args = [
+    '-p',
+    '--permission-mode',
+    'bypassPermissions',
+    '--no-session-persistence',
+    '--input-format',
+    'text',
+    '--output-format',
+    'json',
+    '--json-schema',
+    JSON.stringify(schemaObject),
+    '--debug-file',
+    debugFile,
+    '-',
+  ];
+
+  const processResult = await runCommand('claude', args, {
+    stdinText: promptText,
+    env: createSkillEnv(runDir),
+    cwd: ROOT,
+  });
+  const debugLogText = fs.existsSync(debugFile) ? fs.readFileSync(debugFile, 'utf8') : '';
+  const parsed = parseClaudeRaw(processResult.stdout, debugLogText);
+  return {
+    ...processResult,
+    ...parsed,
+    engine: 'claude-code',
+    mode: 'native-skill',
     debugFile,
   };
 }
@@ -1576,7 +1644,7 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
   const outputDir = path.join(runDir, 'outputs');
   const nameIndex = (scenario.id * 7 + agentIndex * 3 + (isClaudeEngine(engineName) ? 1 : 3) + (mode === 'skill' ? 5 : 0)) % RESIDENT_NAME_POOL.length;
   const botName = RESIDENT_NAME_POOL[nameIndex];
-  const promptText = mode === 'skill' ? buildSkillPrompt(scenario, botName) : buildResidentPrompt(scenario, botName);
+  const promptText = mode === 'native-skill' ? buildNativeSkillPrompt(scenario, botName) : mode === 'skill' ? buildSkillPrompt(scenario, botName) : buildResidentPrompt(scenario, botName);
   const scenarioMetadata = {
     scenario_id: scenario.id,
     scenario_name: scenario.name,
@@ -1590,7 +1658,7 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
 
   ensureDir(outputDir);
   writeJson(path.join(runDir, 'scenario.json'), scenarioMetadata);
-  if (mode === 'skill') {
+  if (mode === 'skill' || mode === 'native-skill') {
     ensureTownCliBuilt(runRoot);
     writeText(path.join(runDir, 'mounted-skill.md'), loadSkillText());
   }
@@ -1604,6 +1672,8 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
     engineResult = await runClaudeEngine(promptText, runDir, botName, schemaObject);
   } else if (engineName === 'claude-code' && mode === 'skill') {
     engineResult = await runClaudeSkillEngine(promptText, runDir, schemaObject);
+  } else if (engineName === 'claude-code' && mode === 'native-skill') {
+    engineResult = await runClaudeNativeSkillEngine(promptText, runDir, schemaObject);
   } else if (engineName === 'codex' && mode === 'mcp') {
     engineResult = await runCodexEngine(promptText, runDir, botName);
   } else if (engineName === 'codex' && mode === 'skill') {
@@ -1766,6 +1836,11 @@ async function main() {
   const reviewPath = maybeGenerateReview(runRoot);
   if (reviewPath) {
     writeText(path.join(runRoot, 'review-path.txt'), `${reviewPath}\n`);
+    try {
+      spawn('open', [reviewPath], { stdio: 'ignore', detached: true }).unref();
+    } catch (openError) {
+      // 自动打开浏览器失败不阻断评测流程。
+    }
   }
 
   process.stdout.write(`${path.join(runRoot, 'report.md')}\n`);
