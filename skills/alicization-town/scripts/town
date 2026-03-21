@@ -1249,6 +1249,70 @@ var require_server = __commonJS({
   }
 });
 
+// packages/town-cli/src/lib/update.js
+var require_update = __commonJS({
+  "packages/town-cli/src/lib/update.js"(exports2, module2) {
+    var path = require("path");
+    var { execSync } = require("child_process");
+    var fs = require("fs");
+    var os = require("os");
+    var REPO = "ceresOPA/Alicization-Town";
+    var BRANCH = "main";
+    var REMOTE_DIR = "skills/alicization-town";
+    var API_BASE = `https://api.github.com/repos/${REPO}/contents/${REMOTE_DIR}?ref=${BRANCH}`;
+    function fetchJson(url) {
+      const raw = execSync(`curl -sL -H "Accept: application/vnd.github.v3+json" "${url}"`, { encoding: "utf8" });
+      return JSON.parse(raw);
+    }
+    function downloadFile(url, dest) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      execSync(`curl -sL "${url}" -o "${dest}"`);
+    }
+    function syncDir(apiUrl, localDir) {
+      const entries = fetchJson(apiUrl);
+      if (!Array.isArray(entries)) {
+        throw new Error(`Failed to list upstream directory: ${JSON.stringify(entries).slice(0, 200)}`);
+      }
+      for (const entry of entries) {
+        const dest = path.join(localDir, entry.name);
+        if (entry.type === "file") {
+          downloadFile(entry.download_url, dest);
+        } else if (entry.type === "dir") {
+          fs.mkdirSync(dest, { recursive: true });
+          syncDir(entry.url, dest);
+        }
+      }
+    }
+    function update() {
+      const root = path.resolve(__dirname, "..", "..", "..", "..");
+      const localSkillDir = path.join(root, REMOTE_DIR);
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "at-update-"));
+      try {
+        console.log("\u{1F4E5} Fetching latest skill from upstream...");
+        const tmpSkill = path.join(tmpDir, "skill");
+        fs.mkdirSync(tmpSkill, { recursive: true });
+        syncDir(API_BASE, tmpSkill);
+        const newFiles = fs.readdirSync(tmpSkill);
+        if (newFiles.length === 0) {
+          throw new Error("Upstream skill directory is empty \u2014 aborting");
+        }
+        console.log("\u{1F504} Replacing local skill...");
+        const oldEntries = fs.readdirSync(localSkillDir);
+        for (const entry of oldEntries) {
+          fs.rmSync(path.join(localSkillDir, entry), { recursive: true, force: true });
+        }
+        for (const entry of newFiles) {
+          execSync(`cp -R "${path.join(tmpSkill, entry)}" "${path.join(localSkillDir, entry)}"`);
+        }
+        console.log("\u2705 Update complete. Skill is now up to date.");
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    }
+    module2.exports = { update };
+  }
+});
+
 // packages/town-cli/src/town.js
 var command = process.argv[2];
 var args = process.argv.slice(3);
@@ -1283,6 +1347,9 @@ async function main() {
       break;
     case "server":
       require_server().server(args);
+      break;
+    case "update":
+      await require_update().update();
       break;
     default:
       console.log(`\u2694\uFE0F  Alicization Town \u2014 AI Agent CLI

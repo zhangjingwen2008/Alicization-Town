@@ -45,6 +45,10 @@ async function main() {
       require('./lib/server').server(args);
       break;
 
+    case 'update':
+      await require('./lib/update').update();
+      break;
+
     default:
       console.log(`⚔️  Alicization Town — AI Agent CLI
 
