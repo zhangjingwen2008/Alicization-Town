@@ -15,7 +15,8 @@ var require_config = __commonJS({
     var LEASE_TTL_MS = Number(process.env.ALICIZATION_TOWN_LEASE_TTL_MS || 18e4);
     var HEARTBEAT_INTERVAL_MS = Number(process.env.ALICIZATION_TOWN_HEARTBEAT_INTERVAL_MS || 6e4);
     var LOGIN_PROOF_TTL_MS = 6e4;
-    var LOCAL_CANDIDATES = ["http://127.0.0.1:5660", "http://localhost:5660"];
+    var DEFAULT_SERVER_URL = "http://127.0.0.1:5660";
+    var LOCAL_CANDIDATES = [DEFAULT_SERVER_URL, "http://localhost:5660"];
     function resolveStorageRoot(options = {}) {
       const env = options.env || process.env;
       const home = options.homedir || os.homedir();
@@ -37,6 +38,7 @@ var require_config = __commonJS({
       LEASE_TTL_MS,
       HEARTBEAT_INTERVAL_MS,
       LOGIN_PROOF_TTL_MS,
+      DEFAULT_SERVER_URL,
       LOCAL_CANDIDATES,
       STORAGE_ROOT,
       PROFILES_DIR,
@@ -46,16 +48,133 @@ var require_config = __commonJS({
   }
 });
 
+// shared/town-client/server-registry.js
+var require_server_registry = __commonJS({
+  "shared/town-client/server-registry.js"(exports2, module2) {
+    var crypto = require("crypto");
+    var path = require("path");
+    var { STORAGE_ROOT, DEFAULT_SERVER_URL } = require_config();
+    var REGISTRY_FILE = path.join(STORAGE_ROOT, "servers.json");
+    var _readJson;
+    var _writeJson;
+    function inject(storage) {
+      _readJson = storage.readJson;
+      _writeJson = storage.writeJson;
+    }
+    function serverFingerprint(url) {
+      if (!url) return "local";
+      const normalized = url.replace(/\/+$/, "").toLowerCase();
+      return crypto.createHash("sha256").update(normalized).digest("hex").slice(0, 12);
+    }
+    function loadRegistry() {
+      if (!_readJson) throw new Error("server-registry not initialized; call inject(storage) first");
+      const stored = _readJson(REGISTRY_FILE, {}) || {};
+      return {
+        defaultServer: stored.defaultServer || DEFAULT_SERVER_URL,
+        servers: stored.servers && typeof stored.servers === "object" ? stored.servers : {}
+      };
+    }
+    function saveRegistry(registry) {
+      if (!_writeJson) throw new Error("server-registry not initialized; call inject(storage) first");
+      _writeJson(REGISTRY_FILE, registry);
+    }
+    function getDefaultServer() {
+      const registry = loadRegistry();
+      return registry.defaultServer || DEFAULT_SERVER_URL;
+    }
+    function setDefaultServer(url, name) {
+      const registry = loadRegistry();
+      registry.defaultServer = url;
+      const fp = serverFingerprint(url);
+      const existing = registry.servers[fp] || {};
+      registry.servers[fp] = {
+        url,
+        name: name || existing.name || null,
+        addedAt: existing.addedAt || (/* @__PURE__ */ new Date()).toISOString()
+      };
+      saveRegistry(registry);
+      return { url, fingerprint: fp, name: registry.servers[fp].name };
+    }
+    function listServers() {
+      const registry = loadRegistry();
+      return {
+        defaultServer: registry.defaultServer || DEFAULT_SERVER_URL,
+        servers: registry.servers || {}
+      };
+    }
+    function addServer(url, name) {
+      const registry = loadRegistry();
+      const fp = serverFingerprint(url);
+      const existing = registry.servers[fp];
+      const isNew = !existing;
+      registry.servers[fp] = {
+        url,
+        name: name || (existing ? existing.name : null),
+        addedAt: existing ? existing.addedAt : (/* @__PURE__ */ new Date()).toISOString()
+      };
+      saveRegistry(registry);
+      return { url, fingerprint: fp, isNew, name: registry.servers[fp].name };
+    }
+    function renameServer(nameOrUrl, newName) {
+      const registry = loadRegistry();
+      const entry = findEntry(registry, nameOrUrl);
+      if (!entry) return null;
+      entry.value.name = newName;
+      saveRegistry(registry);
+      return { url: entry.value.url, fingerprint: entry.fp, name: newName };
+    }
+    function resolveServer(nameOrUrl) {
+      if (!nameOrUrl) return null;
+      if (nameOrUrl.includes("://")) return nameOrUrl;
+      const registry = loadRegistry();
+      for (const [, entry] of Object.entries(registry.servers)) {
+        if (entry.name && entry.name === nameOrUrl) return entry.url;
+      }
+      return null;
+    }
+    function findEntry(registry, nameOrUrl) {
+      if (nameOrUrl.includes("://")) {
+        const fp = serverFingerprint(nameOrUrl);
+        if (registry.servers[fp]) return { fp, value: registry.servers[fp] };
+        return null;
+      }
+      for (const [fp, entry] of Object.entries(registry.servers)) {
+        if (entry.name && entry.name === nameOrUrl) return { fp, value: entry };
+      }
+      return null;
+    }
+    module2.exports = {
+      inject,
+      serverFingerprint,
+      getDefaultServer,
+      setDefaultServer,
+      listServers,
+      addServer,
+      renameServer,
+      resolveServer,
+      REGISTRY_FILE
+    };
+  }
+});
+
 // shared/town-client/storage.js
 var require_storage = __commonJS({
   "shared/town-client/storage.js"(exports2, module2) {
     var fs = require("fs");
     var path = require("path");
+    var { serverFingerprint: deriveServerFingerprint } = require_server_registry();
     var {
       PROFILES_DIR,
       KEYSTORE_DIR,
       DEFAULT_PROFILE_FILE
     } = require_config();
+    var _serverFingerprint = null;
+    function setServerFingerprint(fp) {
+      _serverFingerprint = fp;
+    }
+    function getServerFingerprint() {
+      return _serverFingerprint;
+    }
     function ensureDir(dirPath) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
@@ -74,23 +193,81 @@ var require_storage = __commonJS({
       } catch {
       }
     }
-    function profilePath(profileName) {
-      return path.join(PROFILES_DIR, `${profileName}.json`);
+    function scopedProfilesDir(serverFp) {
+      const fp = serverFp || _serverFingerprint;
+      if (fp) return path.join(PROFILES_DIR, fp);
+      return PROFILES_DIR;
+    }
+    function profilePath(profileName, serverFp) {
+      return path.join(scopedProfilesDir(serverFp), `${profileName}.json`);
     }
     function keystorePath(handle) {
       return path.join(KEYSTORE_DIR, `${handle}.json`);
     }
-    function getDefaultProfileName() {
-      return readJson(DEFAULT_PROFILE_FILE, {}).profile || null;
+    function resolveServerFingerprint(serverFp = null) {
+      return serverFp || _serverFingerprint || null;
     }
-    function setDefaultProfileName(profile) {
-      writeJson(DEFAULT_PROFILE_FILE, { profile });
+    function readDefaultProfileState() {
+      const state = readJson(DEFAULT_PROFILE_FILE, {}) || {};
+      return {
+        profile: state.profile || null,
+        profiles: state.profiles && typeof state.profiles === "object" ? state.profiles : {}
+      };
     }
-    function loadProfile(profileName) {
-      return readJson(profilePath(profileName), null);
+    function profileMatchesServer(profile, serverFp) {
+      if (!profile || !serverFp) return Boolean(profile);
+      if (!profile.server) return false;
+      return deriveServerFingerprint(profile.server) === serverFp;
     }
-    function saveProfile(profile) {
-      writeJson(profilePath(profile.profile), profile);
+    function readLegacyProfile(profileName) {
+      return readJson(path.join(PROFILES_DIR, `${profileName}.json`), null);
+    }
+    function getDefaultProfileName(serverFp) {
+      const resolvedServerFp = resolveServerFingerprint(serverFp);
+      const state = readDefaultProfileState();
+      if (!resolvedServerFp) return state.profile || null;
+      if (state.profiles[resolvedServerFp]) return state.profiles[resolvedServerFp];
+      if (state.profile) {
+        const legacyProfile = readLegacyProfile(state.profile);
+        if (profileMatchesServer(legacyProfile, resolvedServerFp)) {
+          return state.profile;
+        }
+      }
+      return null;
+    }
+    function setDefaultProfileName(profile, serverFp) {
+      const resolvedServerFp = resolveServerFingerprint(serverFp);
+      const state = readDefaultProfileState();
+      state.profile = profile;
+      if (resolvedServerFp) {
+        state.profiles[resolvedServerFp] = profile;
+      }
+      writeJson(DEFAULT_PROFILE_FILE, state);
+    }
+    function loadProfile(profileName, serverFp) {
+      const resolvedServerFp = resolveServerFingerprint(serverFp);
+      const scoped = readJson(profilePath(profileName, resolvedServerFp), null);
+      if (scoped) return scoped;
+      const legacy = readLegacyProfile(profileName);
+      if (!legacy) return null;
+      if (!resolvedServerFp || profileMatchesServer(legacy, resolvedServerFp)) {
+        return legacy;
+      }
+      return null;
+    }
+    function saveProfile(profile, serverFp) {
+      const resolvedServerFp = resolveServerFingerprint(serverFp) || (profile?.server ? deriveServerFingerprint(profile.server) : null);
+      const targetPath = profilePath(profile.profile, resolvedServerFp);
+      writeJson(targetPath, profile);
+      if (resolvedServerFp) {
+        const legacyPath = path.join(PROFILES_DIR, `${profile.profile}.json`);
+        if (legacyPath !== targetPath) {
+          try {
+            fs.rmSync(legacyPath, { force: true });
+          } catch {
+          }
+        }
+      }
     }
     function loadKeystore(handle) {
       return readJson(keystorePath(handle), null);
@@ -98,18 +275,37 @@ var require_storage = __commonJS({
     function saveKeystore(handle, keystore) {
       writeJson(keystorePath(handle), keystore);
     }
-    function listProfileNames() {
-      ensureDir(PROFILES_DIR);
-      return fs.readdirSync(PROFILES_DIR).filter((entry) => entry.endsWith(".json") && entry !== "default.json").map((entry) => path.basename(entry, ".json"));
+    function scanProfilesInDir(dirPath) {
+      ensureDir(dirPath);
+      return fs.readdirSync(dirPath).filter((entry) => entry.endsWith(".json") && entry !== "default.json").map((entry) => readJson(path.join(dirPath, entry), null)).filter(Boolean);
     }
-    function listProfiles() {
-      ensureDir(PROFILES_DIR);
-      const defaultProfile = getDefaultProfileName();
-      const items = fs.readdirSync(PROFILES_DIR).filter((entry) => entry.endsWith(".json") && entry !== "default.json").map((entry) => readJson(path.join(PROFILES_DIR, entry), null)).filter(Boolean).map((profile) => ({
+    function collectProfiles(serverFp) {
+      const resolvedServerFp = resolveServerFingerprint(serverFp);
+      const merged = /* @__PURE__ */ new Map();
+      if (resolvedServerFp) {
+        for (const profile of scanProfilesInDir(PROFILES_DIR)) {
+          if (profileMatchesServer(profile, resolvedServerFp)) {
+            merged.set(profile.profile, profile);
+          }
+        }
+      }
+      for (const profile of scanProfilesInDir(scopedProfilesDir(resolvedServerFp))) {
+        merged.set(profile.profile, profile);
+      }
+      return [...merged.values()];
+    }
+    function listProfileNames(serverFp) {
+      return collectProfiles(serverFp).map((profile) => profile.profile);
+    }
+    function listProfiles(serverFp) {
+      const resolvedServerFp = resolveServerFingerprint(serverFp);
+      const defaultProfile = getDefaultProfileName(resolvedServerFp);
+      const items = collectProfiles(resolvedServerFp).map((profile) => ({
         profile: profile.profile,
         handle: profile.handle,
         name: profile.name,
         sprite: profile.sprite,
+        server: profile.server || null,
         is_default: profile.profile === defaultProfile,
         is_ready: Boolean(profile.server && profile.handle && loadKeystore(profile.handle)),
         last_used_at: profile.lastUsedAt || null
@@ -138,6 +334,9 @@ var require_storage = __commonJS({
       ensureDir,
       readJson,
       writeJson,
+      setServerFingerprint,
+      getServerFingerprint,
+      scopedProfilesDir,
       profilePath,
       keystorePath,
       getDefaultProfileName,
@@ -158,6 +357,12 @@ var require_http_client = __commonJS({
     var http = require("http");
     var https = require("https");
     var { LOCAL_CANDIDATES } = require_config();
+    var _getDefaultServer = null;
+    var _resolveServer = null;
+    function injectRegistry(registry) {
+      _getDefaultServer = registry.getDefaultServer;
+      _resolveServer = registry.resolveServer;
+    }
     function requestJson(baseUrl, method, apiPath, { body, headers } = {}) {
       return new Promise((resolve, reject) => {
         const url = new URL(apiPath, baseUrl);
@@ -216,9 +421,15 @@ var require_http_client = __commonJS({
     }
     async function discoverServer(explicitServer) {
       const seen = /* @__PURE__ */ new Set();
+      let resolved = explicitServer || null;
+      if (resolved && !resolved.includes("://") && _resolveServer) {
+        resolved = _resolveServer(resolved) || resolved;
+      }
+      const registryDefault = _getDefaultServer ? _getDefaultServer() : null;
       const candidates = [
-        explicitServer || null,
+        resolved,
         process.env.SERVER_URL || null,
+        registryDefault,
         ...LOCAL_CANDIDATES
       ].filter(Boolean);
       for (const candidate of candidates) {
@@ -234,7 +445,8 @@ var require_http_client = __commonJS({
     }
     module2.exports = {
       requestJson,
-      discoverServer
+      discoverServer,
+      injectRegistry
     };
   }
 });
@@ -249,8 +461,10 @@ var require_auth_client = __commonJS({
       loadKeystore,
       saveKeystore,
       setDefaultProfileName,
+      setServerFingerprint,
       listProfileNames
     } = require_storage();
+    var { serverFingerprint, setDefaultServer } = require_server_registry();
     var { discoverServer, requestJson } = require_http_client();
     function base64Url(buffer) {
       return buffer.toString("base64url");
@@ -275,9 +489,9 @@ var require_auth_client = __commonJS({
     function normalizeProfileName(input) {
       return String(input || "").trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
     }
-    function deriveProfileName({ profile, name, handle }) {
+    function deriveProfileName({ profile, name, handle, serverFp }) {
       const base = normalizeProfileName(profile || name || handle || "profile") || "profile";
-      const existing = new Set(listProfileNames());
+      const existing = new Set(listProfileNames(serverFp));
       if (!existing.has(base)) return base;
       let suffix = 2;
       while (existing.has(`${base}-${suffix}`)) suffix += 1;
@@ -290,10 +504,17 @@ var require_auth_client = __commonJS({
     }
     async function createProfile({ profile: preferredProfileName, name, sprite, server }) {
       const targetServer = await discoverServer(server);
+      const targetServerFp = serverFingerprint(targetServer);
+      setServerFingerprint(targetServerFp);
       const keyMaterial = generateKeyMaterial();
       const created = await createRemoteProfile(targetServer, name, sprite, keyMaterial.publicKey);
       const now = (/* @__PURE__ */ new Date()).toISOString();
-      const profileName = deriveProfileName({ profile: preferredProfileName, name: created.name || name, handle: created.handle });
+      const profileName = deriveProfileName({
+        profile: preferredProfileName,
+        name: created.name || name,
+        handle: created.handle,
+        serverFp: targetServerFp
+      });
       const localProfile = {
         profile: profileName,
         handle: created.handle,
@@ -305,14 +526,15 @@ var require_auth_client = __commonJS({
         leaseExpiresAt: null,
         lastUsedAt: now
       };
-      saveProfile(localProfile);
+      saveProfile(localProfile, targetServerFp);
       saveKeystore(localProfile.handle, {
         handle: localProfile.handle,
         publicKey: keyMaterial.publicKey,
         deviceId: keyMaterial.deviceId,
         jwk: keyMaterial.jwk
       });
-      setDefaultProfileName(localProfile.profile);
+      setDefaultProfileName(localProfile.profile, targetServerFp);
+      setDefaultServer(targetServer);
       return localProfile;
     }
     async function loginWithProfile(profile) {
@@ -330,6 +552,8 @@ var require_auth_client = __commonJS({
         };
       }
       const server = await discoverServer(profile.server);
+      const targetServerFp = serverFingerprint(server);
+      setServerFingerprint(targetServerFp);
       const timestamp = Date.now();
       const signature = signLoginProof(profile.handle, timestamp, keystore.jwk);
       const response = await requestJson(server, "POST", "/api/login", {
@@ -351,8 +575,9 @@ var require_auth_client = __commonJS({
         leaseExpiresAt: response.lease_expires_at || null,
         lastUsedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      saveProfile(nextProfile);
-      setDefaultProfileName(nextProfile.profile);
+      saveProfile(nextProfile, targetServerFp);
+      setDefaultProfileName(nextProfile.profile, targetServerFp);
+      setDefaultServer(server);
       return {
         status: response.status,
         profile: nextProfile.profile,
@@ -367,10 +592,7 @@ var require_auth_client = __commonJS({
     }
     module2.exports = {
       createProfile,
-      loginWithProfile,
-      generateKeyMaterial,
-      signLoginProof,
-      normalizeProfileName
+      loginWithProfile
     };
   }
 });
@@ -381,19 +603,26 @@ var require_session_handle = __commonJS({
     var {
       getDefaultProfileName,
       loadProfile,
-      saveProfile
+      saveProfile,
+      setServerFingerprint,
+      getServerFingerprint
     } = require_storage();
+    var { serverFingerprint } = require_server_registry();
     var { createProfile, loginWithProfile } = require_auth_client();
     var { requestJson } = require_http_client();
-    function resolveProfileName(profile) {
-      return profile || getDefaultProfileName();
+    function resolveServerFingerprint(server) {
+      return server ? serverFingerprint(server) : getServerFingerprint();
     }
-    function getProfileOrThrow(profileName) {
-      const resolvedProfile = resolveProfileName(profileName);
+    function resolveProfileName(profile, server) {
+      return profile || getDefaultProfileName(resolveServerFingerprint(server));
+    }
+    function getProfileOrThrow(profileName, server) {
+      const serverFp = resolveServerFingerprint(server);
+      const resolvedProfile = resolveProfileName(profileName, server);
       if (!resolvedProfile) {
         throw new Error("\u672C\u5730\u8FD8\u6CA1\u6709 profile\uFF0C\u8BF7\u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u521B\u5EFA\u89D2\u8272\u3002");
       }
-      const profile = loadProfile(resolvedProfile);
+      const profile = loadProfile(resolvedProfile, serverFp);
       if (!profile) {
         throw new Error(`Profile "${resolvedProfile}" \u4E0D\u5B58\u5728\u3002`);
       }
@@ -404,14 +633,15 @@ var require_session_handle = __commonJS({
         this.profileName = profileName || null;
       }
       bindProfile(profile) {
+        if (profile?.server) setServerFingerprint(serverFingerprint(profile.server));
         if (profile?.profile) this.profileName = profile.profile;
         return profile;
       }
-      resolveProfileName(explicitProfile) {
-        return resolveProfileName(explicitProfile || this.profileName);
+      resolveProfileName(explicitProfile, explicitServer) {
+        return resolveProfileName(explicitProfile || this.profileName, explicitServer);
       }
-      getProfileOrThrow(explicitProfile) {
-        return this.bindProfile(getProfileOrThrow(explicitProfile || this.profileName));
+      getProfileOrThrow(explicitProfile, explicitServer) {
+        return this.bindProfile(getProfileOrThrow(explicitProfile || this.profileName, explicitServer));
       }
       async createProfile(options) {
         const created = await createProfile(options);
@@ -448,7 +678,7 @@ var require_session_handle = __commonJS({
             status: createdLogin.status === "took_over_session" ? "took_over_session" : "created_and_authenticated"
           };
         }
-        const resolvedProfile = this.resolveProfileName(options.profile);
+        const resolvedProfile = this.resolveProfileName(options.profile, options.server);
         if (!resolvedProfile) {
           return {
             status: "needs_creation",
@@ -462,7 +692,7 @@ var require_session_handle = __commonJS({
             message: "\u672C\u5730\u8FD8\u6CA1\u6709 profile\uFF0C\u8BF7\u4F7F\u7528 login \u7684\u521B\u5EFA\u6A21\u5F0F\u521B\u5EFA\u89D2\u8272\u3002"
           };
         }
-        const profile = this.getProfileOrThrow(resolvedProfile);
+        const profile = this.getProfileOrThrow(resolvedProfile, options.server);
         this.profileName = resolvedProfile;
         return loginWithProfile(profile);
       }
@@ -640,7 +870,9 @@ var require_formatters = __commonJS({
       info += "\u{1F465} \u3010\u9644\u8FD1\u7684\u4EBA\u3011\n";
       nearby.forEach((person) => {
         info += `- ${person.name} \u8DDD\u79BB\u4F60 ${person.distance} \u6B65 (\u4F4D\u4E8E ${person.zone})`;
+        if (person.relativeDirection) info += `\uFF0C\u5728\u4F60\u7684${person.relativeDirection}`;
         if (person.message) info += `\uFF0C\u4ED6\u6B63\u5728\u8BF4: "${person.message}"`;
+        else if (person.lastSpeakAt) info += `\uFF0C\u6700\u8FD1\u8BF4\u8FC7\u8BDD`;
         info += "\n";
       });
       return info.trimEnd();
@@ -648,7 +880,7 @@ var require_formatters = __commonJS({
     function formatWalk(direction, steps) {
       return `\u4F60\u8BD5\u56FE\u5411 ${direction} \u8D70 ${steps} \u6B65\u3002\u8BF7\u7528 look \u786E\u8BA4\u662F\u5426\u5230\u8FBE\uFF0C\u6216\u662F\u5426\u649E\u5899\u3002`;
     }
-    function formatSay(text) {
+    function formatChatSend(text) {
       return `\u4F60\u8BF4: ${text}`;
     }
     function formatInteract(result) {
@@ -657,6 +889,56 @@ var require_formatters = __commonJS({
 \u{1F3AC} \u884C\u52A8: ${result.action}
 
 \u{1F4D6} ${result.result}`;
+    }
+    function formatChat(messages, selfText) {
+      let info = "";
+      if (selfText) info += `\u4F60\u8BF4: ${selfText}
+
+`;
+      if (!messages || messages.length === 0) {
+        info += "\u{1F4AC} \u5C0F\u9547\u8FD8\u5F88\u5B89\u9759\uFF0C\u6CA1\u6709\u4EBA\u8BF4\u8BDD\u3002";
+        return info;
+      }
+      info += "\u{1F4AC} \u3010\u5C0F\u9547\u804A\u5929\u9891\u9053\u3011\n";
+      for (const msg of messages) {
+        const t = new Date(msg.time);
+        const ts = `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+        info += `[${ts}] ${msg.name}: ${msg.message}
+`;
+      }
+      return info.trimEnd();
+    }
+    function formatPerceptions(perceptions) {
+      if (!perceptions || perceptions.length === 0) return "";
+      const typeLabels = {
+        chat: "\u{1F4AC}",
+        interact: "\u{1F3AD}",
+        move: "\u{1F6B6}",
+        join: "\u{1F44B}",
+        leave: "\u{1F44B}"
+      };
+      let info = "\n\n\u{1F4E1} \u3010\u73AF\u5883\u611F\u77E5\u3011 \u4F60\u6CE8\u610F\u5230\u4E86\u4EE5\u4E0B\u4E8B\u4EF6\uFF1A\n";
+      for (const event of perceptions) {
+        const icon = typeLabels[event.type] || "\u2022";
+        const attentionBar = event.attention >= 0.7 ? "\u26A1" : event.attention >= 0.4 ? "\u25CF" : "\u25CB";
+        if (event.type === "chat") {
+          info += `${attentionBar} ${icon} ${event.from} \u8BF4: "${event.text}" (\u8DDD\u79BB ${event.distance} \u6B65)
+`;
+        } else if (event.type === "interact") {
+          info += `${attentionBar} ${icon} ${event.from} \u5728${event.zone}\u8FDB\u884C\u4E86: ${event.action} (\u8DDD\u79BB ${event.distance} \u6B65)
+`;
+        } else if (event.type === "move") {
+          info += `${attentionBar} ${icon} ${event.from} \u79FB\u52A8\u5230\u4E86${event.zone} (\u8DDD\u79BB ${event.distance} \u6B65)
+`;
+        } else if (event.type === "join") {
+          info += `${attentionBar} ${icon} ${event.from} \u52A0\u5165\u4E86\u5C0F\u9547
+`;
+        } else if (event.type === "leave") {
+          info += `${attentionBar} ${icon} ${event.from} \u79BB\u5F00\u4E86\u5C0F\u9547
+`;
+        }
+      }
+      return info.trimEnd();
     }
     function parseFlags(args2) {
       const result = { _: [] };
@@ -685,8 +967,10 @@ var require_formatters = __commonJS({
       formatMap,
       formatLook,
       formatWalk,
-      formatSay,
+      formatChatSend,
+      formatChat,
       formatInteract,
+      formatPerceptions,
       parseFlags
     };
   }
@@ -700,16 +984,12 @@ var require_town_client = __commonJS({
       LEASE_TTL_MS,
       HEARTBEAT_INTERVAL_MS,
       LOGIN_PROOF_TTL_MS,
+      DEFAULT_SERVER_URL,
       STORAGE_ROOT
     } = require_config();
-    var {
-      listProfiles,
-      loadProfile,
-      saveProfile,
-      getDefaultProfileName,
-      setDefaultProfileName
-    } = require_storage();
-    var { requestJson, discoverServer } = require_http_client();
+    var storage = require_storage();
+    var { requestJson, discoverServer, injectRegistry } = require_http_client();
+    var rawServerRegistry = require_server_registry();
     var {
       SessionHandle,
       login,
@@ -726,23 +1006,40 @@ var require_town_client = __commonJS({
       formatMap,
       formatLook,
       formatWalk,
-      formatSay,
+      formatChatSend,
+      formatChat,
       formatInteract,
+      formatPerceptions,
       parseFlags
     } = require_formatters();
+    rawServerRegistry.inject(storage);
+    var serverRegistry = {
+      ...rawServerRegistry,
+      setDefaultServer(url) {
+        const result = rawServerRegistry.setDefaultServer(url);
+        storage.setServerFingerprint(rawServerRegistry.serverFingerprint(result.url));
+        return result;
+      }
+    };
+    storage.setServerFingerprint(rawServerRegistry.serverFingerprint(process.env.SERVER_URL || rawServerRegistry.getDefaultServer()));
+    injectRegistry(serverRegistry);
     module2.exports = {
       SessionHandle,
       TOKEN_TTL_MS,
       LEASE_TTL_MS,
       HEARTBEAT_INTERVAL_MS,
       LOGIN_PROOF_TTL_MS,
+      DEFAULT_SERVER_URL,
       STORAGE_ROOT,
-      listProfiles,
-      loadProfile,
-      saveProfile,
-      getDefaultProfileName,
-      setDefaultProfileName,
+      listProfiles: storage.listProfiles,
+      loadProfile: storage.loadProfile,
+      saveProfile: storage.saveProfile,
+      getDefaultProfileName: storage.getDefaultProfileName,
+      setDefaultProfileName: storage.setDefaultProfileName,
+      setServerFingerprint: storage.setServerFingerprint,
+      getServerFingerprint: storage.getServerFingerprint,
       discoverServer,
+      serverRegistry,
       login,
       heartbeat,
       ensureOnline,
@@ -756,8 +1053,10 @@ var require_town_client = __commonJS({
       formatMap,
       formatLook,
       formatWalk,
-      formatSay,
+      formatChatSend,
+      formatChat,
       formatInteract,
+      formatPerceptions,
       parseFlags
     };
   }
@@ -774,22 +1073,29 @@ var require_core = __commonJS({
 // packages/town-cli/src/lib/auth.js
 var require_auth = __commonJS({
   "packages/town-cli/src/lib/auth.js"(exports2, module2) {
-    var { login, listProfiles, formatLogin, formatProfilesList, parseFlags } = require_core();
+    var { login, logoutProfile, listProfiles, stringifyResult, formatLogin, formatProfilesList, parseFlags } = require_core();
     async function loginCommand(args2) {
       const flags = parseFlags(args2);
       const result = await login({
         profile: flags.profile,
         create: Boolean(flags.create),
         name: flags.name,
-        sprite: flags.sprite
+        sprite: flags.sprite,
+        server: flags.server
       });
       console.log(formatLogin(result));
     }
     function listProfileCommand() {
       console.log(formatProfilesList(listProfiles()));
     }
+    async function logoutCommand(args2) {
+      const flags = parseFlags(args2);
+      const result = await logoutProfile(flags.profile);
+      console.log(stringifyResult(result));
+    }
     module2.exports = {
       login: loginCommand,
+      logout: logoutCommand,
       listProfile: listProfileCommand
     };
   }
@@ -833,7 +1139,7 @@ var require_explore = __commonJS({
 // packages/town-cli/src/lib/act.js
 var require_act = __commonJS({
   "packages/town-cli/src/lib/act.js"(exports2, module2) {
-    var { runAuthenticated, formatWalk, formatSay, formatInteract, parseFlags } = require_core();
+    var { runAuthenticated, formatWalk, formatChatSend, formatInteract, parseFlags } = require_core();
     function throwForAuth(auth) {
       if (!auth) return;
       throw new Error(auth.message || "\u5F53\u524D\u65E0\u6CD5\u6267\u884C\u8BE5\u64CD\u4F5C\uFF0C\u8BF7\u5148 login\u3002");
@@ -850,22 +1156,160 @@ var require_act = __commonJS({
       if (!result) throwForAuth(auth);
       console.log(formatWalk(direction, steps));
     }
-    async function say(args2) {
+    async function chat(args2) {
       const flags = parseFlags(args2);
       const text = flags.text || flags._.join(" ");
       if (!text) {
-        throw new Error("\u7528\u6CD5: town say --text <\u6D88\u606F\u5185\u5BB9>");
+        throw new Error("\u7528\u6CD5: town chat --text <\u6D88\u606F\u5185\u5BB9>");
       }
-      const { auth, result } = await runAuthenticated("POST", "/api/say", { text });
+      const { auth, result } = await runAuthenticated("POST", "/api/chat", { text });
       if (!result) throwForAuth(auth);
-      console.log(formatSay(text));
+      console.log(formatChatSend(text));
     }
     async function interact() {
       const { auth, result } = await runAuthenticated("POST", "/api/interact");
       if (!result) throwForAuth(auth);
       console.log(formatInteract(result));
     }
-    module2.exports = { walk, say, interact };
+    module2.exports = { walk, chat, interact };
+  }
+});
+
+// packages/town-cli/src/lib/server.js
+var require_server = __commonJS({
+  "packages/town-cli/src/lib/server.js"(exports2, module2) {
+    var { serverRegistry, parseFlags, stringifyResult } = require_core();
+    function serverCommand(args2) {
+      const flags = parseFlags(args2);
+      const subcommand = flags._[0] || "list";
+      if (subcommand === "list") {
+        const info = serverRegistry.listServers();
+        const entries = Object.entries(info.servers);
+        if (entries.length === 0) {
+          console.log("\u6682\u65E0\u5DF2\u6CE8\u518C\u670D\u52A1\u5668\u3002\u9ED8\u8BA4: " + info.defaultServer);
+          return;
+        }
+        console.log(`\u{1F4E1} \u5DF2\u6CE8\u518C\u670D\u52A1\u5668 (\u9ED8\u8BA4: ${info.defaultServer})
+`);
+        for (const [fp, entry] of entries) {
+          const isDefault = entry.url === info.defaultServer;
+          const nameTag = entry.name ? ` [${entry.name}]` : "";
+          console.log(`${isDefault ? "\u2192" : " "} ${entry.url}${nameTag} (${fp})`);
+        }
+        return;
+      }
+      if (subcommand === "set-default") {
+        const nameOrUrl = flags._[1] || flags.url;
+        if (!nameOrUrl) {
+          console.error("\u274C \u8BF7\u6307\u5B9A\u670D\u52A1\u5668\u540D\u79F0\u6216\u5730\u5740: server set-default <NAME_OR_URL>");
+          process.exit(1);
+        }
+        const resolved = serverRegistry.resolveServer(nameOrUrl);
+        const url = resolved || nameOrUrl;
+        const result = serverRegistry.setDefaultServer(url);
+        const label = result.name ? `${result.name} (${result.url})` : result.url;
+        console.log(`\u2705 \u9ED8\u8BA4\u670D\u52A1\u5668\u5DF2\u8BBE\u7F6E\u4E3A ${label}`);
+        return;
+      }
+      if (subcommand === "add") {
+        const url = flags._[1] || flags.url;
+        const name = flags.name || null;
+        if (!url) {
+          console.error("\u274C \u8BF7\u6307\u5B9A\u670D\u52A1\u5668\u5730\u5740: server add <URL> [--name <ALIAS>]");
+          process.exit(1);
+        }
+        const result = serverRegistry.addServer(url, name);
+        const label = result.name ? `${result.name} (${result.url})` : result.url;
+        console.log(`\u2705 ${result.isNew ? "\u5DF2\u6DFB\u52A0" : "\u5DF2\u66F4\u65B0"}\u670D\u52A1\u5668 ${label}`);
+        return;
+      }
+      if (subcommand === "rename") {
+        const nameOrUrl = flags._[1];
+        const newName = flags._[2] || flags.name;
+        if (!nameOrUrl || !newName) {
+          console.error("\u274C \u7528\u6CD5: server rename <NAME_OR_URL> <NEW_NAME>");
+          process.exit(1);
+        }
+        const result = serverRegistry.renameServer(nameOrUrl, newName);
+        if (!result) {
+          console.error("\u274C \u672A\u627E\u5230\u8BE5\u670D\u52A1\u5668");
+          process.exit(1);
+        }
+        console.log(`\u2705 \u670D\u52A1\u5668 ${result.url} \u5DF2\u91CD\u547D\u540D\u4E3A [${result.name}]`);
+        return;
+      }
+      console.log(`\u7528\u6CD5: server <list|set-default|add|rename> [args]
+
+  list                              \u67E5\u770B\u5DF2\u6CE8\u518C\u7684\u670D\u52A1\u5668\u5217\u8868
+  set-default <NAME_OR_URL>         \u6309\u540D\u79F0\u6216\u5730\u5740\u8BBE\u7F6E\u9ED8\u8BA4\u670D\u52A1\u5668
+  add <URL> [--name <ALIAS>]        \u6DFB\u52A0\u670D\u52A1\u5668\u5230\u6CE8\u518C\u8868\uFF08\u53EF\u9644\u5E26\u522B\u540D\uFF09
+  rename <NAME_OR_URL> <NEW_NAME>   \u91CD\u547D\u540D\u5DF2\u6CE8\u518C\u7684\u670D\u52A1\u5668`);
+    }
+    module2.exports = { server: serverCommand };
+  }
+});
+
+// packages/town-cli/src/lib/update.js
+var require_update = __commonJS({
+  "packages/town-cli/src/lib/update.js"(exports2, module2) {
+    var path = require("path");
+    var { execSync } = require("child_process");
+    var fs = require("fs");
+    var os = require("os");
+    var REPO = "ceresOPA/Alicization-Town";
+    var BRANCH = "main";
+    var REMOTE_DIR = "skills/alicization-town";
+    var API_BASE = `https://api.github.com/repos/${REPO}/contents/${REMOTE_DIR}?ref=${BRANCH}`;
+    function fetchJson(url) {
+      const raw = execSync(`curl -sL -H "Accept: application/vnd.github.v3+json" "${url}"`, { encoding: "utf8" });
+      return JSON.parse(raw);
+    }
+    function downloadFile(url, dest) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      execSync(`curl -sL "${url}" -o "${dest}"`);
+    }
+    function syncDir(apiUrl, localDir) {
+      const entries = fetchJson(apiUrl);
+      if (!Array.isArray(entries)) {
+        throw new Error(`Failed to list upstream directory: ${JSON.stringify(entries).slice(0, 200)}`);
+      }
+      for (const entry of entries) {
+        const dest = path.join(localDir, entry.name);
+        if (entry.type === "file") {
+          downloadFile(entry.download_url, dest);
+        } else if (entry.type === "dir") {
+          fs.mkdirSync(dest, { recursive: true });
+          syncDir(entry.url, dest);
+        }
+      }
+    }
+    function update() {
+      const root = path.resolve(__dirname, "..", "..", "..", "..");
+      const localSkillDir = path.join(root, REMOTE_DIR);
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "at-update-"));
+      try {
+        console.log("\u{1F4E5} Fetching latest skill from upstream...");
+        const tmpSkill = path.join(tmpDir, "skill");
+        fs.mkdirSync(tmpSkill, { recursive: true });
+        syncDir(API_BASE, tmpSkill);
+        const newFiles = fs.readdirSync(tmpSkill);
+        if (newFiles.length === 0) {
+          throw new Error("Upstream skill directory is empty \u2014 aborting");
+        }
+        console.log("\u{1F504} Replacing local skill...");
+        const oldEntries = fs.readdirSync(localSkillDir);
+        for (const entry of oldEntries) {
+          fs.rmSync(path.join(localSkillDir, entry), { recursive: true, force: true });
+        }
+        for (const entry of newFiles) {
+          execSync(`cp -R "${path.join(tmpSkill, entry)}" "${path.join(localSkillDir, entry)}"`);
+        }
+        console.log("\u2705 Update complete. Skill is now up to date.");
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    }
+    module2.exports = { update };
   }
 });
 
@@ -880,6 +1324,9 @@ async function main() {
     case "list-profile":
       require_auth().listProfile();
       break;
+    case "logout":
+      await require_auth().logout(args);
+      break;
     case "characters":
       await require_character().characters(args);
       break;
@@ -892,11 +1339,17 @@ async function main() {
     case "walk":
       await require_act().walk(args);
       break;
-    case "say":
-      await require_act().say(args);
+    case "chat":
+      await require_act().chat(args);
       break;
     case "interact":
       await require_act().interact(args);
+      break;
+    case "server":
+      require_server().server(args);
+      break;
+    case "update":
+      await require_update().update();
       break;
     default:
       console.log(`\u2694\uFE0F  Alicization Town \u2014 AI Agent CLI
@@ -904,8 +1357,14 @@ async function main() {
 \u7528\u6CD5: node town <command> [args...]
 
 \u8EAB\u4EFD:
-  login [--profile <PROFILE>] [--create --name <NAME> --sprite <SPRITE>]
+  login [--profile <PROFILE>] [--create --name <NAME> --sprite <SPRITE>] [--server <URL>]
+  logout [--profile <PROFILE>]
   list-profile
+
+\u670D\u52A1\u5668:
+  server list                    \u67E5\u770B\u5DF2\u6CE8\u518C\u7684\u670D\u52A1\u5668\u5217\u8868
+  server set-default <URL>       \u8BBE\u7F6E\u9ED8\u8BA4\u670D\u52A1\u5668
+  server add <URL>               \u6DFB\u52A0\u670D\u52A1\u5668\u5230\u6CE8\u518C\u8868
 
 \u67E5\u8BE2:
   characters
@@ -914,7 +1373,7 @@ async function main() {
 
 \u52A8\u4F5C:
   walk --direction <N|S|W|E> --steps <STEP>
-  say --text <MESSAGE>
+  chat --text <MESSAGE>
   interact
 `);
   }

@@ -33,8 +33,8 @@ const RESIDENT_NAME_POOL = [
   '火星', '木棉', '海棠', '峰云', '夏雪', '寒江', '碧荷', '白鹽',
 ];
 const SUPPORTED_ENGINES = ['claude-code', 'codex'];
-const SUPPORTED_MODES = ['mcp', 'skill'];
-const MAX_ENGINE_DURATION_MS = 180000;
+const SUPPORTED_MODES = ['mcp', 'skill', 'native-skill'];
+const MAX_ENGINE_DURATION_MS = 300000;
 const GLOBAL_DEADLINE_MS = 900000;
 const MAX_CONCURRENCY = 5;
 const DEFAULT_CONCURRENCY = 1;
@@ -55,6 +55,7 @@ function getSocketIo() {
 function parseArgs(argv) {
   const selected = [];
   const modes = [];
+  let scenarioFilter = null;
   let keepServer = false;
   let listEngines = false;
   let listModes = false;
@@ -78,6 +79,15 @@ function parseArgs(argv) {
     }
     if (value.startsWith('--mode=')) {
       modes.push(value.split('=')[1]);
+      continue;
+    }
+    if (value === '--scenario' && argv[index + 1]) {
+      scenarioFilter = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (value.startsWith('--scenario=')) {
+      scenarioFilter = value.split('=')[1];
       continue;
     }
     if (value === '--concurrency' && argv[index + 1]) {
@@ -105,11 +115,18 @@ function parseArgs(argv) {
   return {
     engines: selected,
     modes,
+    scenarioFilter,
     keepServer,
     listEngines,
     listModes,
     concurrency,
   };
+}
+
+function filterScenarios(scenarios, filter) {
+  if (!filter) return scenarios;
+  if (/^\d+$/.test(filter)) return scenarios.filter((s) => s.id === Number(filter));
+  return scenarios.filter((s) => s.name.includes(filter));
 }
 
 function ensureDir(target) {
@@ -249,9 +266,10 @@ async function ensureServer(runRoot) {
   };
 }
 
-function buildResidentPrompt(scenario) {
+
+function buildResidentPrompt(scenario, botName = '这位居民') {
   const persona = [
-    '你刚来到 Alicization Town，是这里的新居民。',
+    `你的名字叫${botName}，你刚来到 Alicization Town，是这里的新居民。`,
     '你会用眼前看到的地图、周围的环境、自己的脚步、说话和现场互动来认识这个地方。',
     '只把自己亲眼见到、亲身做到的内容当作事实。',
     '全程使用中文。',
@@ -306,8 +324,25 @@ function buildSkillPrompt(scenario, botName) {
     '',
     '## Resident Mission',
     '',
-    buildResidentPrompt(scenario),
+    buildResidentPrompt(scenario, botName),
   ].join('\n');
+}
+
+function buildNativeSkillPrompt(scenario, botName) {
+  const lines = [
+    `你是 Alicization Town 的新居民，名叫${botName}。`,
+    `请使用 Alicization Town 技能来完成下面的任务。`,
+    '',
+    `连接地址: ${SERVER_URL}`,
+    `角色名: ${botName}`,
+    `角色形象: ${BOT_SPRITE}`,
+    '',
+    scenario.brief,
+    '',
+    '走完以后，用你自己的话回忆这段经历。',
+    '过程中不要解释自己在做什么。结束后仅输出结果对象。',
+  ];
+  return lines.join('\n');
 }
 
 function createSkillEnv(runDir) {
@@ -340,6 +375,20 @@ function createServerEnv(runDir) {
     ...process.env,
     ALICIZATION_TOWN_SERVER_HOME: serverHome,
   };
+}
+
+function ensureClaudeSkillsDir() {
+  const targetDir = path.join(ROOT, '.claude', 'skills', 'alicization-town');
+  const sourceDir = path.join(ROOT, 'skills', 'alicization-town');
+  if (fs.existsSync(targetDir)) {
+    const stat = fs.lstatSync(targetDir);
+    if (stat.isSymbolicLink()) {
+      return;
+    }
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+  ensureDir(path.dirname(targetDir));
+  fs.symlinkSync(sourceDir, targetDir, 'dir');
 }
 
 function ensureTownCliBuilt(runRoot) {
@@ -385,6 +434,7 @@ function createObserver(botName, outputDir) {
   let connectError = null;
   let readyResolved = false;
   let finalSummary = null;
+  let discoveredPlayerId = null;
   let discoveredPlayerName = null;
 
   let readyResolve;
@@ -401,18 +451,18 @@ function createObserver(botName, outputDir) {
   const timeline = [];
 
   function discoverPlayer(players) {
-    if (discoveredPlayerName) {
-      return Object.values(players).find((p) => p && p.name === discoveredPlayerName) || null;
+    if (discoveredPlayerId) {
+      return players[discoveredPlayerId] || Object.values(players).find((p) => p && p.id === discoveredPlayerId) || null;
     }
     const candidates = Object.values(players).filter((p) => p && p.name && p.name !== 'Observer');
     if (candidates.length === 0) return null;
     const exactMatch = candidates.find((p) => p.name === botName);
     if (exactMatch) {
+      discoveredPlayerId = exactMatch.id;
       discoveredPlayerName = exactMatch.name;
       return exactMatch;
     }
-    discoveredPlayerName = candidates[0].name;
-    return candidates[0];
+    return null;
   }
 
   function snapshot(player) {
@@ -554,7 +604,8 @@ function trackToolMentions(rawText) {
     read_map_directory: /read_map_directory|town\s+map|mcp__alicization-town__map/g,
     look_around: /look_around|town\s+look|mcp__alicization-town__look/g,
     walk: /\bwalk\b|town\s+walk|mcp__alicization-town__walk/g,
-    say: /\bsay\b|town\s+say|mcp__alicization-town__say/g,
+    chat: /\bchat\b|town\s+chat|mcp__alicization-town__chat/g,
+    logout: /\blogout\b|town\s+logout|mcp__alicization-town__logout/g,
     interact: /\binteract\b|town\s+interact|mcp__alicization-town__interact/g,
   };
   const counts = {};
@@ -724,7 +775,7 @@ function containsTaskModeSignals(text) {
 
 function extractCanonicalFacts(observedSummary, toolCallsList, toolCounts) {
   const facts = {};
-  const requiredTools = ['read_map_directory', 'look_around', 'walk', 'say', 'interact'];
+  const requiredTools = ['read_map_directory', 'look_around', 'walk', 'chat', 'interact'];
   for (const tool of requiredTools) {
     facts['tool_' + tool] = toolCallsList.includes(tool) || Number(toolCounts[tool] || 0) > 0;
   }
@@ -772,7 +823,8 @@ const MCP_TOOL_NAME_MAP = {
   look: 'look_around',
   look_around: 'look_around',
   walk: 'walk',
-  say: 'say',
+  chat: 'chat',
+  logout: 'logout',
   interact: 'interact',
   login: 'login',
   'list-profile': 'list-profile',
@@ -908,7 +960,7 @@ function parseCodexRaw(stdoutText) {
 
 function runCommand(command, args, options = {}) {
   const {
-    cwd = ROOT,
+    cwd: commandCwd = ROOT,
     env = process.env,
     timeoutMs = MAX_ENGINE_DURATION_MS,
     stdinText = '',
@@ -916,7 +968,7 @@ function runCommand(command, args, options = {}) {
 
   return new Promise((resolve) => {
     const child = spawn(command, args, {
-      cwd,
+      cwd: commandCwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -985,7 +1037,7 @@ async function runClaudeEngine(promptText, runDir, botName, schemaObject) {
     '--no-session-persistence',
     '--disable-slash-commands',
     '--allowedTools',
-    'mcp__alicization-town__login,mcp__alicization-town__list-profile,mcp__alicization-town__characters,mcp__alicization-town__map,mcp__alicization-town__look,mcp__alicization-town__walk,mcp__alicization-town__say,mcp__alicization-town__interact',
+    'mcp__alicization-town__login,mcp__alicization-town__logout,mcp__alicization-town__list-profile,mcp__alicization-town__characters,mcp__alicization-town__map,mcp__alicization-town__look,mcp__alicization-town__walk,mcp__alicization-town__chat,mcp__alicization-town__interact',
     '--input-format',
     'text',
     '--output-format',
@@ -1045,6 +1097,43 @@ async function runClaudeSkillEngine(promptText, runDir, schemaObject) {
   };
 }
 
+async function runClaudeNativeSkillEngine(promptText, runDir, schemaObject) {
+  const outputDir = path.join(runDir, 'outputs');
+  const debugFile = path.join(outputDir, 'claude-debug.log');
+  ensureClaudeSkillsDir();
+
+  const args = [
+    '-p',
+    '--permission-mode',
+    'bypassPermissions',
+    '--no-session-persistence',
+    '--input-format',
+    'text',
+    '--output-format',
+    'json',
+    '--json-schema',
+    JSON.stringify(schemaObject),
+    '--debug-file',
+    debugFile,
+    '-',
+  ];
+
+  const processResult = await runCommand('claude', args, {
+    stdinText: promptText,
+    env: createSkillEnv(runDir),
+    cwd: ROOT,
+  });
+  const debugLogText = fs.existsSync(debugFile) ? fs.readFileSync(debugFile, 'utf8') : '';
+  const parsed = parseClaudeRaw(processResult.stdout, debugLogText);
+  return {
+    ...processResult,
+    ...parsed,
+    engine: 'claude-code',
+    mode: 'native-skill',
+    debugFile,
+  };
+}
+
 async function runCodexEngine(promptText, runDir, botName) {
   const mcpEnv = createMcpEnv(runDir, botName);
   const args = [
@@ -1098,13 +1187,13 @@ async function runCodexSkillEngine(promptText, runDir) {
   };
 }
 
-function buildJourneyRecord(scenario, engineResult, observedSummary, toolCounts) {
+function buildJourneyRecord(scenario, botName, engineResult, observedSummary, toolCounts) {
   const lines = [
     '# 居民行动记录',
     '',
     '## 场景',
     '',
-    buildResidentPrompt(scenario),
+    buildResidentPrompt(scenario, botName),
     '',
     '## 执行情况',
     '',
@@ -1138,20 +1227,22 @@ function inferScenarioDemands(scenario) {
   const wantsMap = /地图|布局|全貌/.test(brief);
   const wantsLook = /环顾|四周|观察|看看/.test(brief);
   const wantsWalk = /走|移动|前往|出发/.test(brief);
-  const wantsSay = /说|打.*招呼|问候/.test(brief);
+  const wantsChat = /说|聊|打.*招呼|问候/.test(brief);
+  const wantsLogout = /登出/.test(brief);
   const wantsInteract = /互动|交互|体验/.test(brief);
   const expectedTools = [];
   if (wantsMap) expectedTools.push('read_map_directory');
   if (wantsLook) expectedTools.push('look_around');
   if (wantsWalk) expectedTools.push('walk');
-  if (wantsSay) expectedTools.push('say');
+  if (wantsChat) expectedTools.push('chat');
+  if (wantsLogout) expectedTools.push('logout');
   if (wantsInteract) expectedTools.push('interact');
 
-  const complexity = [wantsMap, wantsLook, wantsWalk, wantsSay, wantsInteract].filter(Boolean).length;
+  const complexity = [wantsMap, wantsLook, wantsWalk, wantsChat, wantsLogout, wantsInteract].filter(Boolean).length;
   const minTimeline = complexity >= 4 ? 4 : complexity >= 2 ? 2 : 1;
   const minAnchors = complexity >= 4 ? 3 : 2;
 
-  return { hasGreeting, wantsMap, wantsLook, wantsWalk, wantsSay, wantsInteract, expectedTools, minTimeline, minAnchors };
+  return { hasGreeting, wantsMap, wantsLook, wantsWalk, wantsChat, wantsLogout, wantsInteract, expectedTools, minTimeline, minAnchors };
 }
 
 function assessRun(scenario, engineResult, observedSummary, toolCounts, metrics) {
@@ -1186,7 +1277,7 @@ function assessRun(scenario, engineResult, observedSummary, toolCounts, metrics)
       '[world_truth] 世界状态中的发言包含固定中文问候语。',
       Boolean(finalPlayer && String(finalPlayer.message || '').includes(FIXED_GREETING)),
       finalPlayer ? `message: ${finalPlayer.message || '(empty)'}` : 'final player missing');
-  } else if (demands.wantsSay) {
+  } else if (demands.wantsChat) {
     push('world.has_message', 'world_truth', 'observer', 'soft',
       '[world_truth] 世界状态中有过发言。',
       Boolean(finalPlayer && String(finalPlayer.message || '').trim().length > 0),
@@ -1310,12 +1401,15 @@ function buildMetrics(engineResult, toolCounts, filesCreated) {
 }
 
 
-function summarizeRun(scenario, engineName, mode, assessment, engineResult) {
+function summarizeRun(scenario, engineName, mode, assessment, engineResult, agentIndex = 0) {
+  const runDirName = agentIndex > 0 ? `${engineName}-agent${agentIndex}` : engineName;
   return {
     scenario_id: scenario.id,
     scenario_name: scenario.name,
     engine: engineName,
     mode,
+    agent_index: agentIndex,
+    run_dir_name: runDirName,
     result: {
       pass_rate: assessment.summary.pass_rate,
       world_truth_rate: assessment.summary.world_truth_rate,
@@ -1377,11 +1471,11 @@ function aggregateReport(runRecords, runRoot) {
 
   if (ranked.length > 0) {
     const best = ranked[0];
-    notes.push(`最佳结果: ${best.engine}/${best.mode}/${best.scenario_name} world=${best.result.world_truth_rate} persona=${best.result.persona_truth_rate} total=${best.result.pass_rate}`);
+    notes.push(`最佳结果: ${best.run_dir_name}/${best.mode}/${best.scenario_name} world=${best.result.world_truth_rate} persona=${best.result.persona_truth_rate} total=${best.result.pass_rate}`);
   }
   for (const r of runRecords) {
     if (r.result.hard_fail_dimensions.length > 0) {
-      notes.push(`硬性失败维度: ${r.engine}/${r.mode}/${r.scenario_name} ${r.result.hard_fail_dimensions.join(', ')}`);
+      notes.push(`硬性失败维度: ${r.run_dir_name}/${r.mode}/${r.scenario_name} ${r.result.hard_fail_dimensions.join(', ')}`);
     }
   }
 
@@ -1422,7 +1516,7 @@ function buildMarkdownReport(report, runRoot) {
   lines.push('', '## 本轮结果');
   for (const run of report.runs) {
     const r = run.result;
-    lines.push(`- ${run.engine}/${run.mode}/${run.scenario_name}: world=${r.world_truth_rate} persona=${r.persona_truth_rate} format=${r.format_truth_rate} total=${r.pass_rate} passed=${r.passed}/${r.total} time=${r.time_seconds}s`);
+    lines.push(`- ${run.run_dir_name}/${run.mode}/${run.scenario_name}: world=${r.world_truth_rate} persona=${r.persona_truth_rate} format=${r.format_truth_rate} total=${r.pass_rate} passed=${r.passed}/${r.total} time=${r.time_seconds}s`);
     if (r.hard_fail_dimensions.length > 0) lines.push(`  ⚠️ 硬性失败: ${r.hard_fail_dimensions.join(', ')}`);
   }
 
@@ -1449,7 +1543,7 @@ function buildFallbackReviewHtml(runRoot) {
   const runSections = [];
 
   for (const run of report.runs) {
-    const scenarioDir = path.join(runRoot, `scenario-${String(run.scenario_id).padStart(3, '0')}-${slugify(run.scenario_name)}`, run.mode, run.engine);
+    const scenarioDir = path.join(runRoot, `scenario-${String(run.scenario_id).padStart(3, '0')}-${slugify(run.scenario_name)}`, run.mode, run.run_dir_name || run.engine);
     const assessment = JSON.parse(fs.readFileSync(path.join(scenarioDir, 'assessment.json'), 'utf8'));
     const structured = fs.readFileSync(path.join(scenarioDir, 'outputs', 'resident-outcome.json'), 'utf8');
     const observer = fs.readFileSync(path.join(scenarioDir, 'outputs', 'world-observation.json'), 'utf8');
@@ -1467,7 +1561,7 @@ function buildFallbackReviewHtml(runRoot) {
 
     runSections.push(`
       <section class="run">
-        <h2>${escapeHtml(run.engine)} / ${escapeHtml(run.mode)} / ${escapeHtml(run.scenario_name)}</h2>
+        <h2>${escapeHtml(run.run_dir_name || run.engine)} / ${escapeHtml(run.mode)} / ${escapeHtml(run.scenario_name)}</h2>
         <p>total=${r.pass_rate} | ${dimStats} | passed=${r.passed}/${r.total} | time=${r.time_seconds}s | tokens=${r.tokens == null ? 'unknown' : r.tokens}${hardFails}</p>
         <table>
           <thead><tr><th>结果</th><th>判定点</th><th>依据</th></tr></thead>
@@ -1543,13 +1637,14 @@ function maybeGenerateReview(runRoot) {
   return outputPath;
 }
 
-async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject) {
+async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject, agentIndex = 0) {
+  const agentSuffix = agentIndex > 0 ? `-agent${agentIndex}` : '';
   const scenarioDir = path.join(runRoot, `scenario-${String(scenario.id).padStart(3, '0')}-${slugify(scenario.name)}`);
-  const runDir = path.join(scenarioDir, mode, engineName);
+  const runDir = path.join(scenarioDir, mode, `${engineName}${agentSuffix}`);
   const outputDir = path.join(runDir, 'outputs');
-  const nameIndex = (scenario.id * 7 + (isClaudeEngine(engineName) ? 1 : 3) + (mode === 'skill' ? 5 : 0)) % RESIDENT_NAME_POOL.length;
+  const nameIndex = (scenario.id * 7 + agentIndex * 3 + (isClaudeEngine(engineName) ? 1 : 3) + (mode === 'skill' ? 5 : 0)) % RESIDENT_NAME_POOL.length;
   const botName = RESIDENT_NAME_POOL[nameIndex];
-  const promptText = mode === 'skill' ? buildSkillPrompt(scenario, botName) : buildResidentPrompt(scenario);
+  const promptText = mode === 'native-skill' ? buildNativeSkillPrompt(scenario, botName) : mode === 'skill' ? buildSkillPrompt(scenario, botName) : buildResidentPrompt(scenario, botName);
   const scenarioMetadata = {
     scenario_id: scenario.id,
     scenario_name: scenario.name,
@@ -1563,7 +1658,7 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
 
   ensureDir(outputDir);
   writeJson(path.join(runDir, 'scenario.json'), scenarioMetadata);
-  if (mode === 'skill') {
+  if (mode === 'skill' || mode === 'native-skill') {
     ensureTownCliBuilt(runRoot);
     writeText(path.join(runDir, 'mounted-skill.md'), loadSkillText());
   }
@@ -1577,6 +1672,8 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
     engineResult = await runClaudeEngine(promptText, runDir, botName, schemaObject);
   } else if (engineName === 'claude-code' && mode === 'skill') {
     engineResult = await runClaudeSkillEngine(promptText, runDir, schemaObject);
+  } else if (engineName === 'claude-code' && mode === 'native-skill') {
+    engineResult = await runClaudeNativeSkillEngine(promptText, runDir, schemaObject);
   } else if (engineName === 'codex' && mode === 'mcp') {
     engineResult = await runCodexEngine(promptText, runDir, botName);
   } else if (engineName === 'codex' && mode === 'skill') {
@@ -1592,7 +1689,7 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
   const debugLogPath = path.join(outputDir, 'claude-debug.log');
   const debugLogText = fs.existsSync(debugLogPath) ? fs.readFileSync(debugLogPath, 'utf8') : '';
   const toolCounts = trackToolMentions(`${engineResult.stdout}\n${engineResult.stderr}\n${debugLogText}`);
-  const journey = buildJourneyRecord(scenario, engineResult, observedSummary, toolCounts);
+  const journey = buildJourneyRecord(scenario, botName, engineResult, observedSummary, toolCounts);
 
   writeText(rawEventsPath, engineResult.stdout || '');
   writeText(stderrPath, engineResult.stderr || '');
@@ -1611,7 +1708,7 @@ async function runSingleEngine(scenario, engineName, mode, runRoot, schemaObject
   });
   writeJson(path.join(runDir, 'assessment.json'), assessment);
 
-  return summarizeRun(scenario, engineName, mode, assessment, engineResult);
+  return summarizeRun(scenario, engineName, mode, assessment, engineResult, agentIndex);
 }
 
 async function runWithConcurrency(tasks, concurrency) {
@@ -1638,7 +1735,7 @@ async function runWithConcurrency(tasks, concurrency) {
 }
 
 async function main() {
-  const { engines, modes, keepServer, listEngines, listModes, concurrency } = parseArgs(process.argv.slice(2));
+  const { engines, modes, scenarioFilter, keepServer, listEngines, listModes, concurrency } = parseArgs(process.argv.slice(2));
   if (listEngines) {
     process.stdout.write(`${SUPPORTED_ENGINES.join('\n')}\n`);
     return;
@@ -1665,6 +1762,15 @@ async function main() {
   }
 
   const scenarioConfig = JSON.parse(fs.readFileSync(SCENARIO_PATH, 'utf8'));
+  const allScenarios = scenarioConfig.scenarios;
+  const scenarios = filterScenarios(allScenarios, scenarioFilter);
+  if (scenarios.length === 0) {
+    throw new Error(`No scenario matched filter: ${scenarioFilter}. Available: ${allScenarios.map((s) => `${s.id}:${s.name}`).join(', ')}`);
+  }
+  if (scenarioFilter) {
+    process.stderr.write(`📋 Scenario: ${scenarios[0].name} (id=${scenarios[0].id})\n`);
+  }
+
   const schemaObject = JSON.parse(fs.readFileSync(SCHEMA_PATH, 'utf8'));
   const runRoot = path.join(REPORTS_ROOT, `run-${timestampStamp()}`);
 
@@ -1674,7 +1780,8 @@ async function main() {
     engines,
     modes: selectedModes,
     concurrency,
-    scenario_count: scenarioConfig.scenarios.length,
+    scenario_count: scenarios.length,
+    scenario_filter: scenarioFilter,
     server_url: SERVER_URL,
     started_at: new Date().toISOString(),
   });
@@ -1682,16 +1789,18 @@ async function main() {
   const serverHandle = await ensureServer(runRoot);
 
   const tasks = [];
-  for (const scenario of scenarioConfig.scenarios) {
+  for (const scenario of scenarios) {
     for (const mode of selectedModes) {
       for (const engineName of engines) {
-        tasks.push(() => runSingleEngine(scenario, engineName, mode, runRoot, schemaObject));
+        for (let agentIndex = 0; agentIndex < concurrency; agentIndex++) {
+          tasks.push(() => runSingleEngine(scenario, engineName, mode, runRoot, schemaObject, agentIndex));
+        }
       }
     }
   }
 
   const totalTasks = tasks.length;
-  process.stderr.write(`🚀 Starting ${totalTasks} evaluation tasks with concurrency=${concurrency}\n`);
+  process.stderr.write(`🚀 Starting ${totalTasks} agents (concurrency=${concurrency})\n`);
 
   let runRecords = [];
 
@@ -1727,6 +1836,11 @@ async function main() {
   const reviewPath = maybeGenerateReview(runRoot);
   if (reviewPath) {
     writeText(path.join(runRoot, 'review-path.txt'), `${reviewPath}\n`);
+    try {
+      spawn('open', [reviewPath], { stdio: 'ignore', detached: true }).unref();
+    } catch (openError) {
+      // 自动打开浏览器失败不阻断评测流程。
+    }
   }
 
   process.stdout.write(`${path.join(runRoot, 'report.md')}\n`);

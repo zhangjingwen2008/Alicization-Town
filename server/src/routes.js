@@ -12,6 +12,8 @@ function requireSession(req, res, next) {
   const { handle, error } = RequestContext.fromRequest(req, { required: true, touchLease: true });
   if (!handle) return res.status(401).json({ error });
   req.requestHandle = handle;
+  req.drainPerceptions = () => worldEngine.perception.drain(handle.playerId);
+  req.drainNewMessages = () => worldEngine.drainChat(handle.playerId);
   return next();
 }
 
@@ -90,7 +92,7 @@ router.post('/logout', (req, res) => {
 router.get('/look', requireSession, (req, res) => {
   const result = worldEngine.look(req.requestHandle.playerId);
   if (!result) return res.status(404).json({ error: '玩家不存在' });
-  res.json(result);
+  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
 });
 
 router.post('/walk', requireSession, (req, res) => {
@@ -101,27 +103,70 @@ router.post('/walk', requireSession, (req, res) => {
   if (!steps || steps < 1) return res.status(400).json({ error: '步数必须 >= 1' });
   const result = worldEngine.move(req.requestHandle.playerId, direction, Math.floor(steps));
   if (!result) return res.status(404).json({ error: '玩家不存在' });
-  res.json(result);
+  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
 });
 
-router.post('/say', requireSession, (req, res) => {
+router.post('/chat', requireSession, (req, res) => {
   const { text } = req.body || {};
   if (!text) return res.status(400).json({ error: '缺少 text 字段' });
-  const result = worldEngine.say(req.requestHandle.playerId, text);
+  const result = worldEngine.chat(req.requestHandle.playerId, text);
   if (!result) return res.status(404).json({ error: '玩家不存在' });
-  res.json(result);
+  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
 });
 
 router.post('/interact', requireSession, (req, res) => {
   const result = worldEngine.interact(req.requestHandle.playerId);
   if (!result) return res.status(404).json({ error: '玩家不存在' });
-  res.json(result);
+  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
 });
 
 router.put('/status', requireSession, (req, res) => {
   const { isThinking } = req.body || {};
   worldEngine.setThinking(req.requestHandle.playerId, isThinking);
-  res.json({ ok: true });
+  res.json({ ok: true, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+});
+
+router.get('/perceptions', requireSession, (req, res) => {
+  res.json({ perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+});
+
+function parseChatCursor(rawCursor) {
+  if (!rawCursor) return null;
+  const match = String(rawCursor).match(/^(\d+):(\d+)$/);
+  if (match) {
+    return {
+      time: Number(match[1]),
+      id: Number(match[2]),
+    };
+  }
+  const numeric = Number(rawCursor);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return numeric >= 1_000_000_000_000 ? { time: numeric, id: 0 } : { time: 0, id: numeric };
+}
+
+function encodeChatCursor(entry) {
+  return `${entry.time}:${entry.id}`;
+}
+
+function isAfterCursor(entry, cursor) {
+  if (!cursor) return true;
+  if (entry.time !== cursor.time) return entry.time > cursor.time;
+  return entry.id > cursor.id;
+}
+
+router.get('/chat', maybeSession, (req, res) => {
+  const rawSince = typeof req.query.since === 'string' ? req.query.since : '';
+  const sinceCursor = parseChatCursor(rawSince);
+  const hasSince = rawSince.length > 0 && sinceCursor !== null;
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  const all = worldEngine.getChatHistory();
+  const filtered = hasSince
+    ? all.filter((message) => isAfterCursor(message, sinceCursor)).slice(0, limit)
+    : all.slice(-limit);
+  const cursor = filtered.length > 0
+    ? encodeChatCursor(filtered[filtered.length - 1])
+    : (hasSince ? rawSince : '');
+  res.json({ messages: filtered, cursor });
 });
 
 module.exports = router;

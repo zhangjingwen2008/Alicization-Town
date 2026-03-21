@@ -135,13 +135,26 @@ function createMockServer() {
           return;
         }
 
-        if (req.url === '/api/say' && req.method === 'POST') {
+        if (req.url === '/api/chat' && req.method === 'POST') {
           if (!auth || !tokens.has(auth)) {
             res.statusCode = 401;
             res.end(JSON.stringify({ error: 'unauthorized' }));
             return;
           }
-          res.end(JSON.stringify({ ok: true }));
+          res.end(JSON.stringify({ ok: true, perceptions: [] }));
+          return;
+        }
+
+        if (req.url.startsWith('/api/chat') && req.method === 'GET') {
+          if (!auth || !tokens.has(auth)) {
+            res.statusCode = 401;
+            res.end(JSON.stringify({ error: 'unauthorized' }));
+            return;
+          }
+          res.end(JSON.stringify({
+            messages: [{ id: 1, time: Date.now(), name: 'BridgeBot', message: '你好' }],
+            cursor: `${Date.now()}:1`,
+          }));
           return;
         }
 
@@ -274,7 +287,7 @@ describe('Bridge MCP (smoke)', () => {
 
     const listResponse = await sendMCPRequest(bridge, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
     const tools = listResponse.result.tools;
-    const expectedTools = ['login', 'list-profile', 'characters', 'look', 'map', 'walk', 'say', 'interact'];
+    const expectedTools = ['login', 'list-profile', 'logout', 'characters', 'look', 'map', 'walk', 'chat', 'interact'];
     assert.deepEqual(tools.map((tool) => tool.name).sort(), expectedTools.slice().sort());
 
     const loginText = await callTool(bridge, 3, 'login', { create: true, name: 'BridgeBot', sprite: 'Samurai' });
@@ -294,7 +307,9 @@ describe('Bridge MCP (smoke)', () => {
     assert.match(await callTool(bridge, 6, 'map'), /Town Center/);
     assert.match(await callTool(bridge, 7, 'look'), /位置感知/);
     assert.match(await callTool(bridge, 8, 'walk', { direction: 'E', steps: 3 }), /你试图向 E 走 3 步/);
-    assert.match(await callTool(bridge, 9, 'say', { text: '你好' }), /你说: 你好/);
-    assert.match(await callTool(bridge, 10, 'interact'), /互动/);
+    assert.match(await callTool(bridge, 9, 'chat', { text: '你好' }), /你说: 你好/);
+    assert.match(await callTool(bridge, 10, 'chat'), /聊天频道/);
+    assert.match(await callTool(bridge, 11, 'interact'), /互动/);
+    assert.equal(JSON.parse(await callTool(bridge, 12, 'logout')).ok, true);
   });
 });

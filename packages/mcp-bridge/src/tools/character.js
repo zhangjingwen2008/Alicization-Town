@@ -1,7 +1,7 @@
 const definitions = [
   {
     name: 'login',
-    description: '登录现有角色，或用 create 模式创建一个新角色并立即进入小镇',
+    description: '登录现有角色，或用 create 模式创建一个新角色并立即进入小镇。可通过 server 参数指定目标服务器地址。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -9,6 +9,7 @@ const definitions = [
         create: { type: 'boolean', description: '是否进入创建模式' },
         name: { type: 'string', description: '创建模式下的新角色名字' },
         sprite: { type: 'string', description: '创建模式下使用的角色外观' },
+        server: { type: 'string', description: '服务器名称或地址 (如 "测试服" 或 "http://example.com:5660")；省略时使用默认服务器' },
       },
     },
     annotations: { title: 'Login', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -18,6 +19,12 @@ const definitions = [
     description: '查看本地已经保存的 profile 列表，以及默认 profile',
     inputSchema: { type: 'object', properties: {} },
     annotations: { title: 'List Profile', readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: 'logout',
+    description: '登出当前角色，结束本地保存的在线会话',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { title: 'Logout', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
     name: 'characters',
@@ -35,6 +42,10 @@ async function handle(name, args, client) {
 
   if (name === 'list-profile') {
     return { content: [{ type: 'text', text: client.formatProfilesList(client.listProfiles()) }] };
+  }
+
+  if (name === 'logout') {
+    return { content: [{ type: 'text', text: client.stringifyResult(await client.logout()) }] };
   }
 
   if (name === 'characters') {

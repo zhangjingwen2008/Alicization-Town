@@ -8,13 +8,16 @@
     }
     h1 { margin-bottom: 2px; color: #4a8e53; text-shadow: 2px 2px 0px #d4e6d6; font-size: 28px; }
     #status-text { color: #9aa899; margin-top: 0; font-size: 16px; margin-bottom: 6px; }
-    #main-layout { display: flex; gap: 10px; align-items: flex-start; }
+
+    /* === Main layout: game + sidebar === */
+    #page-wrapper { display: inline-block; }
+    #main-layout { display: flex; gap: 10px; align-items: stretch; }
     #game-container { position: relative; display: inline-block; flex-shrink: 0; }
-    canvas {
+    #gameCanvas {
       background-color: #a4d460; border: 6px solid #c8a165; border-radius: 10px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.4); image-rendering: pixelated; cursor: grab;
     }
-    canvas.dragging { cursor: grabbing; }
+    #gameCanvas.dragging { cursor: grabbing; }
     #toolbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10; }
     .tool-btn {
       background: rgba(255,255,255,0.88); border: 2px solid #c8a165; border-radius: 8px;
@@ -33,61 +36,113 @@
       padding: 3px 10px; font-size: 11px; font-family: 'Pixelify Sans', sans-serif;
       pointer-events: none;
     }
-    /* Zoom buttons */
-    .zoom-btn { width: 40px; height: 40px; font-size: 20px; }
-    .zoom-btn svg { width: 20px; height: 20px; }
-    #zoom-controls { bottom: 8px; right: 8px; gap: 5px; }
-    /* Zoom controls */
-    #zoom-controls {
-      position: absolute; bottom: 10px; right: 10px; z-index: 20;
-      display: flex; flex-direction: column; gap: 4px;
+
+    /* === Sidebar: constrained to game canvas height === */
+    #side-panel {
+      width: 260px; display: flex; flex-direction: column; gap: 8px;
+      flex-shrink: 0; max-height: 612px; overflow: hidden;
     }
-    .zoom-btn {
-      width: 36px; height: 36px; border: 2px solid #c8a165; border-radius: 8px;
-      background: rgba(0,0,0,0.55); color: #ffeaa7; font-size: 18px; font-weight: 700;
-      font-family: 'Pixelify Sans', sans-serif; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.2s; line-height: 1; -webkit-tap-highlight-color: transparent;
-      user-select: none; touch-action: manipulation;
-    }
-    .zoom-btn:hover { background: rgba(0,0,0,0.75); }
-    .zoom-btn:active { background: rgba(200,161,101,0.4); }
-    .zoom-btn svg { width: 18px; height: 18px; fill: #ffeaa7; pointer-events: none; }
-    #side-panel { width: 280px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+    /* --- Minimap --- */
     #minimap-container {
-      background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px; padding: 8px; text-align: center;
+      background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px;
+      padding: 8px; text-align: center; flex-shrink: 0;
     }
     #minimap-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; }
     #minimapCanvas { border-radius: 6px; image-rendering: pixelated; width: 100%; cursor: crosshair; }
+
+    /* --- AI Online: circular avatar grid (flex: 2) --- */
     #ai-panel-container {
       background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px;
-      padding: 8px; max-height: 240px; display: flex; flex-direction: column;
+      padding: 8px; flex: 2; min-height: 0; display: flex; flex-direction: column;
     }
     #ai-panel-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
     #ai-panel-header { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
     #ai-count { color: #74b9ff; font-size: 12px; }
-    #ai-list { flex: 1; overflow-y: auto; font-size: 12px; color: #ddd; scrollbar-width: thin; scrollbar-color: #c8a165 transparent; }
-    #ai-list::-webkit-scrollbar { width: 5px; }
-    #ai-list::-webkit-scrollbar-thumb { background: #c8a165; border-radius: 3px; }
-    .ai-card {
-      display: flex; align-items: center; gap: 8px; padding: 5px 6px;
-      border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer;
-      border-radius: 6px; transition: background 0.2s;
+
+    /* Avatar grid: auto-fill with flexible sizing */
+    #ai-list {
+      flex: 1; overflow-y: auto;
+      display: flex; flex-wrap: wrap; gap: 6px;
+      align-content: flex-start; justify-content: center;
+      padding: 6px 2px;
+      scrollbar-width: thin; scrollbar-color: #c8a165 transparent;
     }
-    .ai-card:hover { background: rgba(255,255,255,0.08); }
-    .ai-card.selected { background: rgba(116,185,255,0.15); border: 1px solid rgba(116,185,255,0.3); }
-    .ai-avatar { width: 28px; height: 28px; image-rendering: pixelated; border-radius: 4px; background: rgba(0,0,0,0.3); }
-    .ai-info { flex: 1; min-width: 0; }
-    .ai-name { color: #74b9ff; font-weight: 700; font-size: 13px; }
-    .ai-zone { color: #9aa899; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ai-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .ai-status-dot.thinking { background: #fdcb6e; animation: pulse 1s infinite; }
-    .ai-status-dot.active { background: #00b894; }
-    .ai-status-dot.idle { background: #95a5a6; }
+    #ai-list::-webkit-scrollbar { width: 4px; }
+    #ai-list::-webkit-scrollbar-thumb { background: #c8a165; border-radius: 3px; }
+
+    /* Avatar card: vertical layout — icon + name */
+    .ai-avatar-wrap {
+      position: relative; cursor: pointer;
+      width: 52px;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 4px 2px 2px;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      transition: border-color 0.2s, transform 0.15s, background 0.2s;
+      flex-shrink: 0;
+    }
+    .ai-avatar-wrap:hover {
+      background: rgba(255,255,255,0.08);
+      transform: scale(1.06);
+    }
+    .ai-avatar-wrap.selected {
+      border-color: #74b9ff;
+      background: rgba(116,185,255,0.12);
+    }
+
+    /* The canvas icon inside the card */
+    .ai-avatar-icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      image-rendering: pixelated;
+      display: block; flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,0.15);
+      box-shadow: none;
+      background: rgba(0,0,0,0.25);
+    }
+    .ai-avatar-wrap.selected .ai-avatar-icon {
+      border-color: rgba(116,185,255,0.4);
+    }
+
+    /* Name label below avatar */
+    .ai-avatar-name {
+      display: block; width: 100%; text-align: center;
+      font-size: 9px; color: #bbb; line-height: 1.1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ai-avatar-wrap.selected .ai-avatar-name { color: #74b9ff; }
+
+    /* Status dot: overlayed at bottom-right of avatar icon */
+    .ai-avatar-dot {
+      position: absolute; top: 32px; right: 6px;
+      width: 8px; height: 8px; border-radius: 50%;
+      border: 2px solid rgba(40,40,60,0.9);
+    }
+    .ai-avatar-dot.thinking { background: #fdcb6e; animation: pulse 1s infinite; }
+    .ai-avatar-dot.active { background: #00b894; }
+    .ai-avatar-dot.idle { background: #95a5a6; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* --- Stats panel (flex: 1, ratio 1:2 with AI panel) --- */
+    #stats-panel {
+      background: rgba(40,40,60,0.9); border: 3px solid #a29bfe; border-radius: 10px;
+      padding: 8px; flex: 1; min-height: 0;
+    }
+    #stats-panel h3 { color: #a29bfe; font-size: 14px; margin-bottom: 6px; }
+    .stat-row { font-size: 12px; color: #dfe6e9; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); line-height: 1.5; }
+    .stat-name { color: #fdcb6e; font-weight: 700; }
+    #stats-empty { color: #636e72; font-size: 11px; font-style: italic; }
+
+    /* === Bottom panel: Activity + Chat Log side by side === */
+    #bottom-panel {
+      display: flex; gap: 10px; margin-top: 10px;
+      width: 100%;
+    }
     #activity-detail {
       display: none; background: rgba(40,40,60,0.95); border: 3px solid #74b9ff;
-      border-radius: 10px; padding: 8px; max-height: 200px; flex-direction: column;
+      border-radius: 10px; padding: 8px; height: 180px; flex: 1;
+      flex-direction: column; min-width: 0;
     }
     #activity-detail.visible { display: flex; }
     #activity-detail h3 { color: #74b9ff; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
@@ -104,17 +159,10 @@
     .activity-type-say { color: #74b9ff; }
     .activity-type-interact { color: #fdcb6e; }
     .activity-type-join { color: #00b894; }
-    /* 统计面板 */
-    #stats-panel {
-      background: rgba(40,40,60,0.9); border: 3px solid #a29bfe; border-radius: 10px; padding: 8px;
-    }
-    #stats-panel h3 { color: #a29bfe; font-size: 14px; margin-bottom: 6px; }
-    .stat-row { font-size: 12px; color: #dfe6e9; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); line-height: 1.5; }
-    .stat-name { color: #fdcb6e; font-weight: 700; }
-    #stats-empty { color: #636e72; font-size: 11px; font-style: italic; }
+
     #chatlog-container {
       background: rgba(40,40,60,0.9); border: 3px solid #c8a165; border-radius: 10px;
-      padding: 8px; flex: 1; min-height: 200px; max-height: 400px; display: flex; flex-direction: column;
+      padding: 8px; flex: 1; height: 180px; display: flex; flex-direction: column; min-width: 0;
     }
     #chatlog-container h3 { color: #ffeaa7; font-size: 14px; margin-bottom: 4px; flex-shrink: 0; }
     #chatlog { flex: 1; overflow-y: auto; font-size: 12px; color: #ddd; scrollbar-width: thin; scrollbar-color: #c8a165 transparent; }
@@ -124,6 +172,23 @@
     .chat-name { color: #74b9ff; font-weight: 700; }
     .chat-time { color: #636e72; font-size: 10px; }
     .interaction-entry { color: #fdcb6e; font-style: italic; }
+
+    /* Zoom controls (from develop) */
+    #zoom-controls {
+      position: absolute; bottom: 10px; right: 10px; z-index: 20;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .zoom-btn {
+      width: 36px; height: 36px; border: 2px solid #c8a165; border-radius: 8px;
+      background: rgba(0,0,0,0.55); color: #ffeaa7; font-size: 18px; font-weight: 700;
+      font-family: 'Pixelify Sans', sans-serif; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s; line-height: 1; -webkit-tap-highlight-color: transparent;
+      user-select: none; touch-action: manipulation;
+    }
+    .zoom-btn:hover { background: rgba(0,0,0,0.75); }
+    .zoom-btn:active { background: rgba(200,161,101,0.4); }
+    .zoom-btn svg { width: 18px; height: 18px; fill: #ffeaa7; pointer-events: none; }
 
     /* Mobile responsive */
     @media (max-width: 900px) {

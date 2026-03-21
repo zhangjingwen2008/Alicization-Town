@@ -162,8 +162,8 @@ class SQLiteStateStore {
     return this.database.prepare(`
       SELECT token
       FROM auth_sessions
-      WHERE expires_at <= ? OR lease_expires_at <= ?
-    `).all(now, now).map((row) => row.token);
+      WHERE expires_at <= ?
+    `).all(now).map((row) => row.token);
   }
 
   getActiveToken(profileId) {
