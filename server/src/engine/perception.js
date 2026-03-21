@@ -6,6 +6,7 @@ const ATTENTION_THRESHOLD = 0.05;
 
 const BASE_WEIGHTS = {
   say: 1.0,
+  chat: 1.0,
   interact: 0.5,
   join: 0.3,
   leave: 0.3,

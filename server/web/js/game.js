@@ -783,10 +783,9 @@
           }
 
           ctx.font='400 14px "Pixelify Sans","Comic Sans MS",sans-serif';
-          ctx.textAlign='left'; ctx.textBaseline='middle';
-          const nameX=sx+TILE_SIZE*1.2+4;
-          ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle=idle?'rgba(26,26,46,0.55)':'rgba(26,26,46,0.9)'; ctx.strokeText(p.name,nameX,nameY);
-          ctx.fillStyle=p.name==='Observer'?'#f1c40f':(idle?'rgba(255,255,255,0.72)':'#ffffff'); ctx.fillText(p.name,nameX,nameY);
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle=idle?'rgba(26,26,46,0.55)':'rgba(26,26,46,0.9)'; ctx.strokeText(p.name,cx2,nameY);
+          ctx.fillStyle=p.name==='Observer'?'#f1c40f':(idle?'rgba(255,255,255,0.72)':'#ffffff'); ctx.fillText(p.name,cx2,nameY);
 
           const bubbleY=sy-27+floatY;
           ctx.textAlign='center'; ctx.textBaseline='middle';

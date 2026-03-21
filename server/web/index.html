@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Alicization Town</title>
   <link rel="stylesheet" href="css/game.css">
 </head>
@@ -13,13 +14,21 @@
       <div id="game-container">
         <div id="time-display">06:00</div>
         <div id="toolbar">
-          <button class="tool-btn" id="zoom-in-btn" title="放大">+</button>
-          <button class="tool-btn" id="zoom-out-btn" title="缩小">−</button>
-          <button class="tool-btn" id="zoom-reset-btn" title="重置缩放">⊙</button>
           <button class="tool-btn" id="music-toggle">Music OFF</button>
         </div>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="zoom-hint">滚轮缩放 · 拖拽平移 · 点击角色跟随</div>
+        <div id="zoom-controls">
+          <button class="zoom-btn" id="zoom-in-btn" title="Zoom In">
+            <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          </button>
+          <button class="zoom-btn" id="zoom-out-btn" title="Zoom Out">
+            <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+          </button>
+          <button class="zoom-btn" id="zoom-reset-btn" title="Reset Zoom">
+            <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+          </button>
+        </div>
       </div>
       <div id="side-panel">
         <div id="minimap-container">

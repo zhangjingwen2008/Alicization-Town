@@ -282,7 +282,7 @@ describe('HTTP API (integration)', () => {
     const perceptions = await request('GET', '/api/perceptions', null, listenerHeaders);
     assert.equal(perceptions.status, 200);
     assert.equal(perceptions.body.perceptions.length, 1);
-    assert.equal(perceptions.body.perceptions[0].type, 'say');
+    assert.equal(perceptions.body.perceptions[0].type, 'chat');
     assert.equal(perceptions.body.newMessages.length, 1);
     assert.equal(perceptions.body.newMessages[0].message, '有人在吗？');
 

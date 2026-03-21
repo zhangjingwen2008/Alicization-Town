@@ -172,3 +172,53 @@
     .chat-name { color: #74b9ff; font-weight: 700; }
     .chat-time { color: #636e72; font-size: 10px; }
     .interaction-entry { color: #fdcb6e; font-style: italic; }
+
+    /* Zoom controls (from develop) */
+    #zoom-controls {
+      position: absolute; bottom: 10px; right: 10px; z-index: 20;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .zoom-btn {
+      width: 36px; height: 36px; border: 2px solid #c8a165; border-radius: 8px;
+      background: rgba(0,0,0,0.55); color: #ffeaa7; font-size: 18px; font-weight: 700;
+      font-family: 'Pixelify Sans', sans-serif; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s; line-height: 1; -webkit-tap-highlight-color: transparent;
+      user-select: none; touch-action: manipulation;
+    }
+    .zoom-btn:hover { background: rgba(0,0,0,0.75); }
+    .zoom-btn:active { background: rgba(200,161,101,0.4); }
+    .zoom-btn svg { width: 18px; height: 18px; fill: #ffeaa7; pointer-events: none; }
+
+    /* Mobile responsive */
+    @media (max-width: 900px) {
+      body { padding: 6px; }
+      h1 { font-size: 20px; }
+      #status-text { font-size: 13px; }
+      #main-layout { flex-direction: column; align-items: center; width: 100%; }
+      #game-container { width: 100%; }
+      #game-container canvas {
+        width: 100% !important;
+        height: auto !important;
+        display: block;
+      }
+      #side-panel { width: 100%; max-width: 600px; }
+      #minimap-container { display: none; }
+      #zoom-hint { font-size: 10px; padding: 2px 8px; }
+      .zoom-btn { width: 44px; height: 44px; }
+      .zoom-btn svg { width: 22px; height: 22px; }
+      #ai-panel-container { max-height: 180px; }
+      #chatlog-container { min-height: 150px; max-height: 250px; }
+    }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 16px; }
+      #status-text { font-size: 11px; }
+      #zoom-controls { bottom: 6px; right: 6px; }
+      .zoom-btn { width: 40px; height: 40px; }
+      #time-display { font-size: 12px; padding: 3px 8px; }
+      .tool-btn { font-size: 11px; padding: 4px 8px; }
+      #ai-panel-container { max-height: 150px; }
+      #chatlog-container { min-height: 120px; max-height: 200px; }
+      #activity-detail { max-height: 150px; }
+    }
