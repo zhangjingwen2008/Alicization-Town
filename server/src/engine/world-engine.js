@@ -6,6 +6,7 @@ const { ZONE_INTERACTIONS, ZONE_CATEGORY_MAP } = require('../data/interactions')
 const { CHARACTER_SPRITES } = require('../data/characters');
 const { describeRelativeDirection } = require('./relative-direction');
 const { findPath, findNearestWalkable } = require('./pathfinding');
+const actionLock = require('./action-lock');
 const {
   MESSAGE_TTL_MS,
   INTERACTION_TTL_MS,
@@ -371,12 +372,17 @@ function pruneExpiredSessions() {
     destroyToken(token);
   }
 
+  // Remove non-NPC players whose heartbeat lease has expired (ghost cleanup)
+  let changed = false;
   for (const playerId of Object.keys(players)) {
     const player = players[playerId];
-    if (player && getPresenceState(player) === 'idle') {
-      broadcast();
+    if (!player || player.isNPC) continue;
+    if (getPresenceState(player) === 'offline') {
+      removePlayer(playerId);
+      changed = true;
     }
   }
+  if (changed) broadcast();
 }
 
 const cleanupTimer = setInterval(pruneExpiredSessions, 1_000);
@@ -428,6 +434,14 @@ function removePlayer(playerId) {
   delete players[playerId];
   delete playerActivities[playerId];
   perception.cleanup(playerId);
+  actionLock.remove(playerId);
+  broadcast();
+}
+
+function refreshZoneInfo(playerId) {
+  const player = players[playerId];
+  if (!player) return;
+  zoneInfo(player);
   broadcast();
 }
 
@@ -640,6 +654,14 @@ function setThinking(playerId, isThinking) {
   broadcast();
 }
 
+function sanitizeAllPlayers() {
+  const result = {};
+  for (const [id, player] of Object.entries(players)) {
+    result[id] = sanitize(player);
+  }
+  return result;
+}
+
 module.exports = {
   init,
   events,
@@ -664,7 +686,9 @@ module.exports = {
   getMapDirectory: () => mapDirectory,
   getCharacterList: () => CHARACTER_SPRITES.slice(),
   getAllPlayers: () => players,
+  sanitizeAllPlayers,
   getChatHistory: () => chatHistory,
   getWorldMap: () => worldMap,
   drainChat,
+  refreshZoneInfo,
 };

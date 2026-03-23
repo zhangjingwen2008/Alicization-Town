@@ -2,11 +2,10 @@
 const { Router } = require('express');
 const worldEngine = require('./engine/world-engine');
 const { RequestContext } = require('./request-context');
+const actionLock = require('./engine/action-lock');
 
 const router = Router();
 router.use(require('express').json());
-const IDLE_AFTER_MS = Number(process.env.ALICIZATION_TOWN_IDLE_AFTER_MS || 30_000);
-const LEASE_TTL_MS = Number(process.env.ALICIZATION_TOWN_LEASE_TTL_MS || 180_000);
 
 function requireSession(req, res, next) {
   const { handle, error } = RequestContext.fromRequest(req, { required: true, touchLease: true });
@@ -32,28 +31,7 @@ router.get('/map', maybeSession, (req, res) => {
 });
 
 router.get('/players', (_req, res) => {
-  const raw = worldEngine.getAllPlayers();
-  const result = {};
-  const now = Date.now();
-  for (const [id, player] of Object.entries(raw)) {
-    const heartbeatAge = player.lastHeartbeatAt ? now - player.lastHeartbeatAt : Infinity;
-    const actionAge = player.lastActionAt ? now - player.lastActionAt : Infinity;
-    result[id] = {
-      id,
-      name: player.name,
-      x: player.x,
-      y: player.y,
-      zone: player.currentZoneName,
-      sprite: player.sprite,
-      isThinking: player.isThinking,
-      isNPC: player.isNPC || false,
-      message: player.message || '',
-      lastActionAt: player.lastActionAt || null,
-      lastHeartbeatAt: player.lastHeartbeatAt || null,
-      presenceState: heartbeatAge > LEASE_TTL_MS ? 'offline' : (actionAge > IDLE_AFTER_MS ? 'idle' : 'active'),
-    };
-  }
-  res.json({ players: result });
+  res.json({ players: worldEngine.sanitizeAllPlayers() });
 });
 
 router.post('/profiles/create', (req, res) => {
@@ -103,30 +81,42 @@ router.post('/walk', requireSession, async (req, res) => {
   if (!to && !hasAbsoluteCoord && !hasRelative) {
     return res.status(400).json({ error: '需要指定目标: to(地名)、x+y(坐标)、或 forward/right(相对移动)' });
   }
-  const result = await worldEngine.move(req.requestHandle.playerId, { to, x, y, forward, right });
-  if (!result) return res.status(404).json({ error: '玩家不存在' });
-  if (result.error) return res.status(400).json({ error: result.error });
-  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+  const release = await actionLock.acquire(req.requestHandle.playerId);
+  try {
+    const result = await worldEngine.move(req.requestHandle.playerId, { to, x, y, forward, right });
+    if (!result) return res.status(404).json({ error: '玩家不存在' });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+  } finally { release(); }
 });
 
-router.post('/chat', requireSession, (req, res) => {
+router.post('/chat', requireSession, async (req, res) => {
   const { text } = req.body || {};
   if (!text) return res.status(400).json({ error: '缺少 text 字段' });
-  const result = worldEngine.chat(req.requestHandle.playerId, text);
-  if (!result) return res.status(404).json({ error: '玩家不存在' });
-  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+  const release = await actionLock.acquire(req.requestHandle.playerId);
+  try {
+    const result = worldEngine.chat(req.requestHandle.playerId, text);
+    if (!result) return res.status(404).json({ error: '玩家不存在' });
+    res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+  } finally { release(); }
 });
 
-router.post('/interact', requireSession, (req, res) => {
-  const result = worldEngine.interact(req.requestHandle.playerId);
-  if (!result) return res.status(404).json({ error: '玩家不存在' });
-  res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+router.post('/interact', requireSession, async (req, res) => {
+  const release = await actionLock.acquire(req.requestHandle.playerId);
+  try {
+    const result = worldEngine.interact(req.requestHandle.playerId);
+    if (!result) return res.status(404).json({ error: '玩家不存在' });
+    res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+  } finally { release(); }
 });
 
-router.put('/status', requireSession, (req, res) => {
-  const { isThinking } = req.body || {};
-  worldEngine.setThinking(req.requestHandle.playerId, isThinking);
-  res.json({ ok: true, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+router.put('/status', requireSession, async (req, res) => {
+  const release = await actionLock.acquire(req.requestHandle.playerId);
+  try {
+    const { isThinking } = req.body || {};
+    worldEngine.setThinking(req.requestHandle.playerId, isThinking);
+    res.json({ ok: true, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
+  } finally { release(); }
 });
 
 router.get('/perceptions', requireSession, (req, res) => {
