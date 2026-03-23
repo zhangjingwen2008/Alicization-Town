@@ -8,8 +8,9 @@ function acquire(playerId) {
   let release;
   const next = new Promise((resolve) => { release = resolve; });
   locks.set(playerId, next);
-  // Wait for previous action to finish, then hand back the release function
-  return prev.then(() => release);
+  // Wait for previous action to finish, then hand back the release function.
+  // Use both onFulfilled and onRejected to prevent permanent deadlock if prev rejects.
+  return prev.then(() => release, () => release);
 }
 
 function remove(playerId) {
