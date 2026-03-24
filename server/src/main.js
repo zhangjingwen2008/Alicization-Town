@@ -8,6 +8,8 @@ const apiRouter = require('./routes');
 
 const { NpcManager } = require('./npc/npc-manager');
 const { PluginManager } = require('./engine/plugin-manager');
+const BaseInteractionsPlugin = require('./plugins/base-interactions');
+const BaseNpcPlugin = require('./plugins/base-npc');
 
 const app = express();
 const server = http.createServer(app);
@@ -24,7 +26,14 @@ worldEngine.init(path.join(__dirname, '..', 'web', 'assets', 'map.tmj'));
 const pluginManager = new PluginManager();
 app.locals.pluginManager = pluginManager;
 
+// 将 pluginManager 注入引擎，启用插件优先的交互查询
+worldEngine.setPluginManager(pluginManager);
+
 (async () => {
+  // 加载内置基础插件
+  await pluginManager.loadPlugin(new BaseInteractionsPlugin());
+  await pluginManager.loadPlugin(new BaseNpcPlugin());
+
   // 加载外部插件（通过环境变量 ALICIZATION_PLUGINS 指定，逗号分隔）
   const pluginList = (process.env.ALICIZATION_PLUGINS || '').split(',').map(s => s.trim()).filter(Boolean);
   for (const pluginPath of pluginList) {
@@ -36,9 +45,7 @@ app.locals.pluginManager = pluginManager;
       console.error(`🔌 插件加载失败 (${pluginPath}):`, err.message);
     }
   }
-  if (pluginManager.hasPlugins()) {
-    console.log(`🔌 已加载 ${pluginManager.listPlugins().length} 个插件`);
-  }
+  console.log(`🔌 已加载 ${pluginManager.listPlugins().length} 个插件`);
 })();
 
 // ── 通过 SSE 向网页观察端推送状态 ───────────────────────────────────────────
@@ -95,7 +102,7 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => console.log(`🌍 Underworld 已启动: http://localhost:${PORT}`));
 
 // ── 初始化 NPC 常驻系统 ─────────────────────────────────────────────────────
-const npcManager = new NpcManager(worldEngine);
+const npcManager = new NpcManager(worldEngine, pluginManager);
 npcManager.start();
 app.locals.npcManager = npcManager;
 

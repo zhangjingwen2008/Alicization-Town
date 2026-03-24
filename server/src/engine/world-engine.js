@@ -39,6 +39,13 @@ const playerActivities = {};
 const walkAborts = new Map();
 const events = new EventEmitter();
 
+/** @type {import('./plugin-manager').PluginManager|null} */
+let pluginManager = null;
+
+function setPluginManager(pm) {
+  pluginManager = pm;
+}
+
 function deriveHandle(publicKey) {
   return `at_${crypto.createHash('sha256').update(publicKey).digest('hex').slice(0, 24)}`;
 }
@@ -132,8 +139,21 @@ function getZoneAt(gridX, gridY) {
 
 function getInteractionForZone(zone) {
   if (!zone) return { action: '环顾四周', result: '这里是空旷的街道，没有什么特别的。' };
-  const zoneType = zone.type || 'building';
   const normalizedName = (zone.name || '').toLowerCase();
+
+  // ── 插件路径：优先从 pluginManager 获取交互 ───────────────────────────
+  if (pluginManager && pluginManager.hasPlugins()) {
+    const category = _resolveCategory(normalizedName);
+    if (category) {
+      const pluginPool = pluginManager.getInteractions(category);
+      if (pluginPool.length > 0) {
+        return pluginPool[Math.floor(Math.random() * pluginPool.length)];
+      }
+    }
+  }
+
+  // ── Legacy 路径：直接使用硬编码数据 ────────────────────────────────────
+  const zoneType = zone.type || 'building';
   let category = null;
   for (const [matcher, matchedCategory] of ZONE_CATEGORY_MAP) {
     if (matcher.test(normalizedName)) {
@@ -144,6 +164,25 @@ function getInteractionForZone(zone) {
   const pool = ZONE_INTERACTIONS[zoneType]?.[category];
   if (!pool) return { action: '四处看看', result: `你仔细观察了${zone.name}，感受着这里的氛围。` };
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * 从插件 zone matchers 和 legacy matchers 中解析分类名。
+ * 插件 matchers 优先（允许覆盖）。
+ */
+function _resolveCategory(normalizedName) {
+  // 先查插件注册的 matchers
+  if (pluginManager) {
+    const pluginMatchers = pluginManager.getZoneMatchers();
+    for (const [matcher, category] of pluginMatchers) {
+      if (matcher.test(normalizedName)) return category;
+    }
+  }
+  // fallback 到内置 matchers
+  for (const [matcher, category] of ZONE_CATEGORY_MAP) {
+    if (matcher.test(normalizedName)) return category;
+  }
+  return null;
 }
 
 function zoneInfo(player) {
@@ -704,6 +743,7 @@ module.exports = {
   init,
   events,
   perception,
+  setPluginManager,
   createProfile,
   loginProfile,
   heartbeat,
