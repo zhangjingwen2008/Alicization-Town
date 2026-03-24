@@ -680,7 +680,9 @@ function interact(playerId) {
   }, INTERACTION_TTL_MS);
   const entry = {
     time: Date.now(),
+    playerId,
     name: player.name,
+    isNPC: !!player.isNPC,
     zone: zone ? zone.name : '小镇街道',
     action: result.action,
     result: result.result,

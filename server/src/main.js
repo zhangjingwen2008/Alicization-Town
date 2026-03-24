@@ -25,6 +25,7 @@ worldEngine.init(path.join(__dirname, '..', 'web', 'assets', 'map.tmj'));
 // ── 初始化插件系统 ───────────────────────────────────────────────────────────
 const pluginManager = new PluginManager();
 app.locals.pluginManager = pluginManager;
+app.locals.worldEngine = worldEngine;
 
 // 将 pluginManager 注入引擎，启用插件优先的交互查询
 worldEngine.setPluginManager(pluginManager);
@@ -46,6 +47,31 @@ worldEngine.setPluginManager(pluginManager);
     }
   }
   console.log(`🔌 已加载 ${pluginManager.listPlugins().length} 个插件`);
+
+  // ── 挂载插件注册的路由和中间件到 Express ─────────────────────────────────
+  // 中间件
+  for (const mw of pluginManager.getMiddleware()) {
+    app.use(mw);
+  }
+
+  // 路由
+  const pluginRoutes = pluginManager.getRoutes();
+  for (const route of pluginRoutes) {
+    const handlers = [];
+    if (route.requireSession) {
+      // 复用 routes.js 中的 requireSession 中间件
+      const routeModule = require('./routes');
+      if (routeModule.requireSession) {
+        handlers.push(routeModule.requireSession);
+      }
+    }
+    handlers.push(route.handler);
+    app[route.method](`/api${route.path}`, ...handlers);
+  }
+
+  if (pluginRoutes.length > 0) {
+    console.log(`🔌 已挂载 ${pluginRoutes.length} 条插件路由`);
+  }
 })();
 
 // ── 通过 SSE 向网页观察端推送状态 ───────────────────────────────────────────
@@ -81,16 +107,19 @@ worldEngine.events.on('stateChange', () => {
 worldEngine.events.on('chat', (entry) => {
   const payload = `event: chat\ndata: ${JSON.stringify(entry)}\n\n`;
   sseClients.forEach(c => c.res.write(payload));
+  pluginManager.emitPluginEvent('chat', entry);
 });
 
 worldEngine.events.on('interaction', (entry) => {
   const payload = `event: interaction\ndata: ${JSON.stringify(entry)}\n\n`;
   sseClients.forEach(c => c.res.write(payload));
+  pluginManager.emitPluginEvent('interaction', entry);
 });
 
 worldEngine.events.on('activity', (data) => {
   const payload = `event: activity\ndata: ${JSON.stringify(data)}\n\n`;
   sseClients.forEach(c => c.res.write(payload));
+  pluginManager.emitPluginEvent('activity', data);
 });
 
 // ── 保留 Socket.IO 通道，供观察链路消费状态更新与基础初始化信息 ───────────────

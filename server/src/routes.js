@@ -194,3 +194,4 @@ router.get('/plugins', (_req, res) => {
 });
 
 module.exports = router;
+module.exports.requireSession = requireSession;
