@@ -178,6 +178,13 @@
         if (hoveredPlayerId && clientPlayers[hoveredPlayerId]) {
           selectAndFollowPlayer(hoveredPlayerId);
         } else {
+          // 检查是否点击了有资源的 zone
+          const zone = getZoneAtMouse();
+          if (zone && isResourceZone(zone.name)) {
+            showZonePopup(zone.name, e.clientX, e.clientY);
+          } else {
+            closeZonePopup();
+          }
           isCameraFollowing = false;
         }
       } else {
@@ -278,6 +285,16 @@
         canvas.classList.remove('dragging');
         if (!dragMoved && hoveredPlayerId && clientPlayers[hoveredPlayerId]) {
           selectAndFollowPlayer(hoveredPlayerId);
+        } else if (!dragMoved) {
+          // 检查是否点击了有资源的 zone（触屏）
+          const zone = getZoneAtMouse();
+          if (zone && isResourceZone(zone.name)) {
+            const rect = canvas.getBoundingClientRect();
+            showZonePopup(zone.name, mouseScreenX / (canvas.width / rect.width) + rect.left, mouseScreenY / (canvas.height / rect.height) + rect.top);
+          } else {
+            closeZonePopup();
+          }
+          isCameraFollowing = false;
         } else if (dragMoved) {
           isCameraFollowing = false;
         }
@@ -1077,6 +1094,143 @@
       el.innerHTML=html||'<span id="stats-empty">Waiting for data...</span>';
     }
     setInterval(updateStatsPanel, 3000);
+
+    // ==========================================
+    // === Zone 资源交互系统 ===
+    // ==========================================
+    let zoneResourceData = {};  // zoneId → { category, zoneName, resources }
+    let hoveredZoneName = null; // 当前鼠标悬停的 zone 名称
+
+    // 判断 zone 名称是否属于有资源的类型
+    const RESOURCE_ZONE_PATTERNS = [
+      /面馆|noodle|restaurant/i,
+      /集市|market/i,
+    ];
+    function isResourceZone(name) {
+      return RESOURCE_ZONE_PATTERNS.some(p => p.test(name || ''));
+    }
+
+    // 拉取 zone 资源数据（静默失败，插件未加载时不影响）
+    function fetchZoneResources() {
+      fetch('/api/rpg/zones/resources')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) zoneResourceData = data; })
+        .catch(() => {});
+    }
+    // 启动后定时刷新资源数据
+    fetchZoneResources();
+    setInterval(fetchZoneResources, 10000);
+
+    // 根据 zone 名称查找对应的资源数据
+    function findResourceByZoneName(zoneName) {
+      for (const [zoneId, data] of Object.entries(zoneResourceData)) {
+        if (data.zoneName === zoneName) return { zoneId, ...data };
+      }
+      return null;
+    }
+
+    // 检测点击位置是否命中某个 zone
+    function getZoneAtMouse() {
+      if (!mapData || mouseX < 0) return null;
+      const zl = mapData.layers.find(l => l.type === 'objectgroup');
+      if (!zl || !zl.objects) return null;
+      const sx2 = TILE_SIZE / mapData.tilewidth, sy2 = TILE_SIZE / mapData.tileheight;
+      for (const zone of zl.objects) {
+        const rx = zone.x * sx2, ry = zone.y * sy2;
+        const rw = zone.width * sx2, rh = zone.height * sy2;
+        if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
+          return zone;
+        }
+      }
+      return null;
+    }
+
+    // === Zone Popup 交互函数 ===
+    function showZonePopup(zoneName, screenX, screenY) {
+      const popup = document.getElementById('zone-popup');
+      const titleEl = document.getElementById('zone-popup-title');
+      const contentEl = document.getElementById('zone-popup-content');
+      const msgEl = document.getElementById('zone-popup-msg');
+      if (!popup || !titleEl || !contentEl) return;
+
+      const resInfo = findResourceByZoneName(zoneName);
+      titleEl.textContent = zoneName;
+      msgEl.textContent = '';
+
+      if (!resInfo) {
+        contentEl.innerHTML = '<div style="color:#999;font-size:13px;">资源数据加载中…</div>';
+        contentEl.innerHTML += `<button class="zone-supply-btn" disabled>补充</button>`;
+      } else {
+        let html = '';
+        for (const [key, res] of Object.entries(resInfo.resources)) {
+          const pct = res.dailyMax > 0 ? Math.round(res.current / res.dailyMax * 100) : 0;
+          const barColor = pct > 50 ? '#27ae60' : pct > 20 ? '#f39c12' : '#e74c3c';
+          html += `<div class="zone-res-row"><span>${res.label}</span><span>${res.current} / ${res.dailyMax} ${res.unit}</span></div>`;
+          html += `<div class="zone-res-bar"><div class="zone-res-fill" style="width:${pct}%;background:${barColor}"></div></div>`;
+        }
+        html += `<button class="zone-supply-btn" onclick="supplyZone('${resInfo.zoneId}')">补充资源</button>`;
+        contentEl.innerHTML = html;
+      }
+
+      // 定位弹窗（靠近点击位置，但不超出视口）
+      popup.style.display = 'block';
+      const popW = popup.offsetWidth, popH = popup.offsetHeight;
+      let left = screenX + 12, top = screenY - popH / 2;
+      if (left + popW > window.innerWidth - 10) left = screenX - popW - 12;
+      if (top < 10) top = 10;
+      if (top + popH > window.innerHeight - 10) top = window.innerHeight - popH - 10;
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+    }
+
+    function closeZonePopup() {
+      const popup = document.getElementById('zone-popup');
+      if (popup) popup.style.display = 'none';
+    }
+
+    function supplyZone(zoneId) {
+      const msgEl = document.getElementById('zone-popup-msg');
+      const btn = document.querySelector('#zone-popup-content .zone-supply-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '补充中…'; }
+
+      fetch(`/api/rpg/zones/${zoneId}/supply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: 1 }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            if (msgEl) msgEl.textContent = data.message || '补充成功！';
+            // 刷新资源数据后用返回的 zoneName 重新渲染弹窗
+            fetch('/api/rpg/zones/resources')
+              .then(r => r.ok ? r.json() : null)
+              .then(fresh => {
+                if (fresh) {
+                  zoneResourceData = fresh;
+                  const zoneName = fresh[zoneId]?.zoneName;
+                  if (zoneName) {
+                    const p = document.getElementById('zone-popup');
+                    showZonePopup(zoneName, parseInt(p.style.left), parseInt(p.style.top));
+                  }
+                }
+              })
+              .catch(() => {});
+          } else {
+            if (msgEl) msgEl.textContent = data.error || '补充失败';
+            if (btn) { btn.disabled = false; btn.textContent = '补充资源'; }
+          }
+        })
+        .catch(() => {
+          if (msgEl) msgEl.textContent = '网络错误，请重试';
+          if (btn) { btn.disabled = false; btn.textContent = '补充资源'; }
+        });
+    }
+
+    // 暴露到全局作用域（供 HTML onclick 调用）
+    window.showZonePopup = showZonePopup;
+    window.closeZonePopup = closeZonePopup;
+    window.supplyZone = supplyZone;
 
     // 页面脚本只启动一次，真正的重连交给 EventSource 自己处理。
     initialize();
