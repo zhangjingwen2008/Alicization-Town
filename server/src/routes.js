@@ -186,4 +186,11 @@ router.get('/chat', maybeSession, (req, res) => {
   res.json({ messages: filtered, cursor });
 });
 
+// ── 插件信息端点 ─────────────────────────────────────────────────────────────
+router.get('/plugins', (_req, res) => {
+  const pluginManager = _req.app.locals.pluginManager;
+  if (!pluginManager) return res.json({ plugins: [] });
+  res.json({ plugins: pluginManager.listPlugins() });
+});
+
 module.exports = router;

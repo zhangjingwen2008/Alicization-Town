@@ -7,6 +7,7 @@ const worldEngine = require('./engine/world-engine');
 const apiRouter = require('./routes');
 
 const { NpcManager } = require('./npc/npc-manager');
+const { PluginManager } = require('./engine/plugin-manager');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +19,27 @@ app.use('/api', apiRouter);
 
 // ── 初始化世界引擎 ───────────────────────────────────────────────────────────
 worldEngine.init(path.join(__dirname, '..', 'web', 'assets', 'map.tmj'));
+
+// ── 初始化插件系统 ───────────────────────────────────────────────────────────
+const pluginManager = new PluginManager();
+app.locals.pluginManager = pluginManager;
+
+(async () => {
+  // 加载外部插件（通过环境变量 ALICIZATION_PLUGINS 指定，逗号分隔）
+  const pluginList = (process.env.ALICIZATION_PLUGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+  for (const pluginPath of pluginList) {
+    try {
+      const PluginModule = require(pluginPath);
+      const PluginClass = PluginModule.default || PluginModule;
+      await pluginManager.loadPlugin(new PluginClass());
+    } catch (err) {
+      console.error(`🔌 插件加载失败 (${pluginPath}):`, err.message);
+    }
+  }
+  if (pluginManager.hasPlugins()) {
+    console.log(`🔌 已加载 ${pluginManager.listPlugins().length} 个插件`);
+  }
+})();
 
 // ── 通过 SSE 向网页观察端推送状态 ───────────────────────────────────────────
 let sseClients = [];
