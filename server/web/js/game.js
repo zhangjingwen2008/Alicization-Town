@@ -1273,7 +1273,7 @@
       const msgEl = document.getElementById('zone-popup-msg');
       if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
 
-      fetch(`/api/rpg/zones/${zoneId}/supply`, {
+      fetch(`/api/rpg/zones/${encodeURIComponent(zoneId)}/supply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resourceType: resourceType, amount: 1 }),
