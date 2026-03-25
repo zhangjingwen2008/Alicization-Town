@@ -76,7 +76,7 @@ async function main() {
 动作:
   walk --to <id> | --x <X> --y <Y> | --forward <N> --right <N>
   chat --text <MESSAGE>
-  interact
+  interact [--item <物品名>]       与当前区域互动（可指定物品）
   status                           查看身体状态（需要 RPG 插件）
 `);
   }

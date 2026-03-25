@@ -36,8 +36,11 @@ async function chat(args) {
   console.log(formatChatSend(text));
 }
 
-async function interact() {
-  const { auth, result } = await runAuthenticated('POST', '/api/interact');
+async function interact(args) {
+  const flags = parseFlags(args);
+  const item = flags.item || flags._.join(' ') || null;
+  const body = item ? { item } : undefined;
+  const { auth, result } = await runAuthenticated('POST', '/api/interact', body);
   if (!result) throwForAuth(auth);
   console.log(formatInteract(result));
 }
