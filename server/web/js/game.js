@@ -115,6 +115,9 @@
       } catch (e) { /* RPG plugin may not be loaded */ }
     }
 
+    // Eager initial fetch so cache is warm before first click
+    fetchZoneResources();
+
     function findZoneAtWorldCoord(wx, wy) {
       if (!mapData) return null;
       const zl = mapData.layers.find(l => l.type === 'objectgroup');
@@ -147,17 +150,71 @@
       }
 
       if (!zoneInv) {
-        hideZoneResourcePanel();
+        // Cache is empty — try fetching fresh data, then re-render
+        _showPanelLoading(zone.name, screenX, screenY);
+        fetchZoneResources().then(() => {
+          // Retry match after fresh fetch
+          let retryInv = null, retryId = null;
+          for (const [id, inv] of Object.entries(zoneResourceCache)) {
+            if (inv.zoneName === zone.name || inv.category === cat) {
+              retryInv = inv;
+              retryId = id;
+              break;
+            }
+          }
+          if (retryInv) {
+            _renderResourcePanel(zone.name, retryInv, retryId, screenX, screenY);
+          } else {
+            // Still no data — plugin likely not loaded
+            _showPanelEmpty(zone.name, screenX, screenY);
+          }
+        });
         return;
       }
 
-      zoneResourceTitle.textContent = zone.name;
+      _renderResourcePanel(zone.name, zoneInv, zoneId, screenX, screenY);
+    }
+
+    /** Show a loading indicator while fetching resource data */
+    function _showPanelLoading(zoneName, screenX, screenY) {
+      zoneResourceTitle.textContent = zoneName;
+      zoneResourceList.innerHTML = '<div style="padding:12px;text-align:center;color:#999;font-size:13px;">Loading...</div>';
+      zoneResourceEmpty.classList.add('hidden');
+      _positionPanel(screenX, screenY);
+    }
+
+    /** Show empty state when no resource data is available */
+    function _showPanelEmpty(zoneName, screenX, screenY) {
+      zoneResourceTitle.textContent = zoneName;
+      zoneResourceList.innerHTML = '';
+      zoneResourceEmpty.textContent = 'RPG 插件未加载或无资源数据';
+      zoneResourceEmpty.classList.remove('hidden');
+      _positionPanel(screenX, screenY);
+    }
+
+    /** Position and show the panel near the click point */
+    function _positionPanel(screenX, screenY) {
+      zoneResourcePanel.classList.remove('hidden');
+      const panelRect = zoneResourcePanel.getBoundingClientRect();
+      let left = screenX + 15;
+      let top = screenY - 20;
+      if (left + panelRect.width > window.innerWidth - 10) left = screenX - panelRect.width - 15;
+      if (top + panelRect.height > window.innerHeight - 10) top = window.innerHeight - panelRect.height - 10;
+      if (top < 10) top = 10;
+      zoneResourcePanel.style.left = left + 'px';
+      zoneResourcePanel.style.top = top + 'px';
+    }
+
+    /** Render the resource panel with actual inventory data */
+    function _renderResourcePanel(zoneName, zoneInv, zoneId, screenX, screenY) {
+      zoneResourceTitle.textContent = zoneName;
       zoneResourceList.innerHTML = '';
       zoneResourceEmpty.classList.add('hidden');
 
       const resources = zoneInv.resources;
       const resKeys = Object.keys(resources);
       if (resKeys.length === 0) {
+        zoneResourceEmpty.textContent = '该区域暂无资源系统';
         zoneResourceEmpty.classList.remove('hidden');
       } else {
         resKeys.forEach(key => {
@@ -219,16 +276,7 @@
         });
       }
 
-      // Position the panel near the click
-      zoneResourcePanel.classList.remove('hidden');
-      const panelRect = zoneResourcePanel.getBoundingClientRect();
-      let left = screenX + 15;
-      let top = screenY - 20;
-      if (left + panelRect.width > window.innerWidth - 10) left = screenX - panelRect.width - 15;
-      if (top + panelRect.height > window.innerHeight - 10) top = window.innerHeight - panelRect.height - 10;
-      if (top < 10) top = 10;
-      zoneResourcePanel.style.left = left + 'px';
-      zoneResourcePanel.style.top = top + 'px';
+      _positionPanel(screenX, screenY);
     }
 
     function hideZoneResourcePanel() {
