@@ -1184,15 +1184,22 @@
         contentEl.innerHTML = html;
       }
 
-      // 定位弹窗（靠近点击位置，但不超出视口）
+      // 定位弹窗：移动端用底部抽屉（CSS 控制），桌面端靠近点击位置
       popup.style.display = 'block';
-      const popW = popup.offsetWidth, popH = popup.offsetHeight;
-      let left = screenX + 12, top = screenY - popH / 2;
-      if (left + popW > window.innerWidth - 10) left = screenX - popW - 12;
-      if (top < 10) top = 10;
-      if (top + popH > window.innerHeight - 10) top = window.innerHeight - popH - 10;
-      popup.style.left = left + 'px';
-      popup.style.top = top + 'px';
+      const isMobile = window.innerWidth <= 600;
+      if (isMobile) {
+        // CSS @media 接管定位，清除内联样式
+        popup.style.left = '';
+        popup.style.top = '';
+      } else {
+        const popW = popup.offsetWidth, popH = popup.offsetHeight;
+        let left = screenX + 12, top = screenY - popH / 2;
+        if (left + popW > window.innerWidth - 10) left = screenX - popW - 12;
+        if (top < 10) top = 10;
+        if (top + popH > window.innerHeight - 10) top = window.innerHeight - popH - 10;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+      }
     }
 
     function closeZonePopup() {
