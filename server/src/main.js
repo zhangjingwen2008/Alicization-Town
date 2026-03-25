@@ -30,6 +30,12 @@ app.locals.worldEngine = worldEngine;
 // 将 pluginManager 注入引擎，启用插件优先的交互查询
 worldEngine.setPluginManager(pluginManager);
 
+// 设置插件活动推送：插件 ctx.emitActivity() → SSE 广播 + 引擎 activity 记录
+pluginManager.setActivityEmitter((data) => {
+  // 记录到引擎的 activity 系统（会合并到玩家 activity 列表）
+  worldEngine.recordPluginActivity(data.id, data.text, data.type);
+});
+
 (async () => {
   // 加载内置基础插件
   await pluginManager.loadPlugin(new BaseInteractionsPlugin());

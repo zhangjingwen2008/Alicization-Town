@@ -120,6 +120,19 @@ class PluginContext extends IPluginContext {
     });
   }
 
+  emitActivity(data) {
+    if (!data || !data.id || !data.text) {
+      throw new Error(`[${this._pluginId}] emitActivity: data.id and data.text required`);
+    }
+    if (typeof this._hooks.activityEmitter === 'function') {
+      this._hooks.activityEmitter({
+        ...data,
+        type: data.type || 'plugin',
+        pluginId: this._pluginId,
+      });
+    }
+  }
+
   /**
    * 内部方法：清理此插件注册的所有事件监听。
    * @private

@@ -192,6 +192,14 @@ class PluginManager {
   }
 
   /**
+   * 设置活动推送回调。插件调用 ctx.emitActivity() 时会触发此回调。
+   * @param {Function} emitter - 接收活动数据的函数
+   */
+  setActivityEmitter(emitter) {
+    this._hooks.activityEmitter = emitter;
+  }
+
+  /**
    * 获取已加载插件列表。
    * @returns {Array<{ id: string, version: string }>}
    */

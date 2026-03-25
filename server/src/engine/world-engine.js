@@ -248,6 +248,13 @@ function addActivity(playerId, activity) {
   }
 }
 
+/**
+ * 供插件推送活动记录（通过 pluginManager.setActivityEmitter 调用）
+ */
+function recordPluginActivity(playerId, text, type) {
+  addActivity(playerId, { type: type || 'plugin', text });
+}
+
 function broadcast() {
   events.emit('stateChange');
 }
@@ -771,5 +778,6 @@ module.exports = {
   getWorldMap: () => worldMap,
   drainChat,
   refreshZoneInfo,
+  recordPluginActivity,
   shutdown,
 };

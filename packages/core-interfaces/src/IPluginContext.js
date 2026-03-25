@@ -99,6 +99,19 @@ class IPluginContext {
   registerZoneMatcher(matcher, category) {
     throw new Error('Not implemented');
   }
+
+  /**
+   * 向前端推送一条活动记录（会出现在 Activity Log 和 SSE 事件流中）。
+   *
+   * @param {Object} data - 活动数据
+   * @param {string} data.id - 关联的 playerId
+   * @param {string} data.name - 角色名
+   * @param {string} data.text - 活动描述文本
+   * @param {string} [data.type='plugin'] - 活动类型
+   */
+  emitActivity(data) {
+    throw new Error('Not implemented');
+  }
 }
 
 module.exports = { IPluginContext };

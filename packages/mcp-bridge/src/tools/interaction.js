@@ -14,7 +14,17 @@ async function handle(name, _args, client) {
     return { content: [{ type: 'text', text: auth?.message || '当前还没有可用 profile，请先 login。' }] };
   }
   const perceptionText = client.formatPerceptions(result.perceptions);
-  return { content: [{ type: 'text', text: client.formatInteract(result) + perceptionText }] };
+
+  // 尝试附带 RPG 属性摘要（插件不存在时静默跳过）
+  let attrText = '';
+  try {
+    const attrResult = await client.getRpgAttrs();
+    if (attrResult && !attrResult.startsWith('⚙️')) {
+      attrText = '\n\n' + attrResult;
+    }
+  } catch {}
+
+  return { content: [{ type: 'text', text: client.formatInteract(result) + perceptionText + attrText }] };
 }
 
 module.exports = { definitions, handle };
