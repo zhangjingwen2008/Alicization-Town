@@ -42,4 +42,48 @@ async function interact() {
   console.log(formatInteract(result));
 }
 
-module.exports = { walk, chat, interact };
+async function status() {
+  try {
+    const { auth, result } = await runAuthenticated('GET', '/api/rpg/attrs');
+    if (!result) throwForAuth(auth);
+    if (!result || !result.attrs) {
+      console.log('⚙️ status 命令需要 RPG Advanced 插件支持。当前服务器未安装该插件，请联系服务器管理员了解详情。');
+      return;
+    }
+
+    const attrLabels = {
+      hp: '❤️ 生命',
+      hunger: '🍜 饱腹',
+      mood: '😊 心情',
+      energy: '⚡ 精力',
+      social: '💬 社交',
+      age: '📅 年龄',
+    };
+
+    let text = '📊 【我的状态】\n';
+    for (const [key, info] of Object.entries(result.attrs)) {
+      const label = attrLabels[key] || key;
+      const max = info.max || 100;
+      const pct = Math.round((info.value / max) * 10);
+      const bar = '█'.repeat(pct) + '░'.repeat(10 - pct);
+      text += `${label}: ${info.value}/${max} ${bar} (${info.label})\n`;
+    }
+
+    if (result.suggestions && result.suggestions.length > 0) {
+      text += '\n💡 【行动建议】\n';
+      for (const s of result.suggestions) {
+        text += `• ${s}\n`;
+      }
+    }
+
+    console.log(text.trimEnd());
+  } catch (err) {
+    if (err.statusCode === 404 || err.message?.includes('404')) {
+      console.log('⚙️ status 命令需要 RPG Advanced 插件支持。当前服务器未安装该插件，请联系服务器管理员了解详情。');
+    } else {
+      throw err;
+    }
+  }
+}
+
+module.exports = { walk, chat, interact, status };
