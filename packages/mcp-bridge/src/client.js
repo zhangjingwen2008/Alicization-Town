@@ -178,6 +178,19 @@ async function getAllZoneResources() {
 }
 
 /**
+ * 查询神社怪谈（优雅降级）
+ * @returns {Array} ghost stories array
+ */
+async function getGhostStories() {
+  try {
+    const { result } = await authenticatedRequest('GET', '/api/shrine/stories');
+    return (result && result.stories) || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 格式化 RPG 属性数据为可读文本
  */
 function formatRpgAttrs(data) {
@@ -255,6 +268,7 @@ module.exports = {
   getRpgAttrs,
   getZoneResources,
   getAllZoneResources,
+  getGhostStories,
   stringifyResult: townClient.stringifyResult,
   formatLogin: townClient.formatLogin,
   formatProfilesList: townClient.formatProfilesList,
