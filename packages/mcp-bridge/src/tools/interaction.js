@@ -29,13 +29,18 @@ async function handle(name, args, client) {
     }
   } catch {}
 
-  // 神社怪谈：如果在神社交互，附加怪谈内容
+  // 神社怪谈：如果在神社交互，主动获取怪谈内容
   let shrineText = '';
-  if (result.ghostStories && result.ghostStories.length > 0) {
-    shrineText = '\n\n👻 【神社怪谈板】\n';
-    for (const s of result.ghostStories) {
-      shrineText += `• "${s.text}" — ${s.author}\n`;
-    }
+  if (/shrine|神社/i.test(result.zone || '')) {
+    try {
+      const stories = await client.getGhostStories();
+      if (stories.length > 0) {
+        shrineText = '\n\n👻 【神社怪谈板】\n';
+        for (const s of stories) {
+          shrineText += `• "${s.text}" — ${s.author}\n`;
+        }
+      }
+    } catch {}
   }
 
   return { content: [{ type: 'text', text: client.formatInteract(result) + shrineText + perceptionText + attrText }] };

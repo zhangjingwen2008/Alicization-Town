@@ -1361,10 +1361,25 @@
         popup.style.top = top + 'px';
       }
 
-      fetch('/api/shrine/stories')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { renderShrineContent(contentEl, msgEl, data ? data.stories : []); })
-        .catch(() => { renderShrineContent(contentEl, msgEl, []); });
+      fetch('/api/rpg/shrine/stories')
+        .then(r => {
+          if (!r.ok) {
+            // 插件未加载时 404
+            contentEl.innerHTML = '<div class="zone-inv-empty">'
+              + '此功能需要 <b>RPG Advanced</b> 插件<br>'
+              + '<a href="https://github.com/ceresOPA/Alicization-Town" target="_blank">GitHub</a>'
+              + '</div>';
+            return null;
+          }
+          return r.json();
+        })
+        .then(data => { if (data) renderShrineContent(contentEl, msgEl, data.stories || []); })
+        .catch(() => {
+          contentEl.innerHTML = '<div class="zone-inv-empty">'
+            + '此功能需要 <b>RPG Advanced</b> 插件<br>'
+            + '<a href="https://github.com/ceresOPA/Alicization-Town" target="_blank">GitHub</a>'
+            + '</div>';
+        });
     }
 
     function renderShrineContent(contentEl, msgEl, stories) {
@@ -1393,7 +1408,7 @@
         const text = (input.value || '').trim();
         if (!text) return;
         btn.disabled = true;
-        fetch('/api/shrine/stories', {
+        fetch('/api/rpg/shrine/stories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text }),

@@ -183,7 +183,7 @@ async function getAllZoneResources() {
  */
 async function getGhostStories() {
   try {
-    const { result } = await authenticatedRequest('GET', '/api/shrine/stories');
+    const { result } = await authenticatedRequest('GET', '/api/rpg/shrine/stories');
     return (result && result.stories) || [];
   } catch {
     return [];
