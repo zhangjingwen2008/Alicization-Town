@@ -7,7 +7,7 @@ services:
     plan: free
     branch: main
     buildCommand: npm install
-    startCommand: node server/src/main.js
+    startCommand: npm run start:server
     envVars:
       - key: NODE_VERSION
         value: "22"
