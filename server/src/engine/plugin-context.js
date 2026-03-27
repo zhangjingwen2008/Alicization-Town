@@ -120,6 +120,32 @@ class PluginContext extends IPluginContext {
     });
   }
 
+  /**
+   * 注册交互钩子：拦截指定区域分类的交互请求。
+   *
+   * 钩子优先于随机交互池。当玩家在该分类区域执行 interact 时，
+   * 引擎会先调用钩子；钩子返回交互结果则使用，返回 null 则回退到随机池。
+   *
+   * 这允许插件（如 RPG Advanced）将资源消耗与交互文本精确绑定，
+   * 避免"显示吃了重庆小面但实际消耗了湖南米粉"的不一致问题。
+   *
+   * @param {string} zoneCategory - 区域分类 (如 'restaurant', 'potion')
+   * @param {Function} hookFn - ({ playerId, playerName, isNPC, zone, category }) =>
+   *   { action, result, icon?, sound?, item? } | null
+   */
+  registerInteractionHook(zoneCategory, hookFn) {
+    if (!zoneCategory || typeof zoneCategory !== 'string') {
+      throw new Error(`[${this._pluginId}] registerInteractionHook: zoneCategory must be a non-empty string`);
+    }
+    if (typeof hookFn !== 'function') {
+      throw new Error(`[${this._pluginId}] registerInteractionHook: hookFn must be a function`);
+    }
+    this._hooks.interactionHooks.set(zoneCategory, {
+      pluginId: this._pluginId,
+      hookFn,
+    });
+  }
+
   emitActivity(data) {
     if (!data || !data.id || !data.text) {
       throw new Error(`[${this._pluginId}] emitActivity: data.id and data.text required`);

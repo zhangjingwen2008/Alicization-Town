@@ -25,6 +25,8 @@ class PluginManager {
       interactions: new Map(),
       /** zone 分类 → { pluginId, type } */
       interactionTypes: new Map(),
+      /** zone 分类 → { pluginId, hookFn } — 交互钩子，优先于随机池 */
+      interactionHooks: new Map(),
       /** 策略名 → { pluginId, fn } */
       npcStrategies: new Map(),
       /** [{ pluginId, method, path, handler, requireSession }] */
@@ -84,6 +86,11 @@ class PluginManager {
       if (entry_.pluginId === pluginId) this._hooks.interactionTypes.delete(cat);
     }
 
+    // 清理 interactionHooks
+    for (const [cat, entry_] of this._hooks.interactionHooks) {
+      if (entry_.pluginId === pluginId) this._hooks.interactionHooks.delete(cat);
+    }
+
     // 清理 npcStrategies
     for (const [name, entry_] of this._hooks.npcStrategies) {
       if (entry_.pluginId === pluginId) this._hooks.npcStrategies.delete(name);
@@ -120,6 +127,17 @@ class PluginManager {
       merged.push(...provider.items);
     }
     return merged;
+  }
+
+  /**
+   * 获取指定区域分类的交互钩子。
+   * 钩子可拦截交互请求，返回与实际资源消耗精确匹配的结果。
+   * @param {string} zoneCategory
+   * @returns {Function|null} hookFn(context) => { action, result, icon?, sound?, item? } | null
+   */
+  getInteractionHook(zoneCategory) {
+    const entry = this._hooks.interactionHooks.get(zoneCategory);
+    return entry ? entry.hookFn : null;
   }
 
   /**

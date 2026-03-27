@@ -137,7 +137,7 @@ function getZoneAt(gridX, gridY) {
   return closest;
 }
 
-function getInteractionForZone(zone) {
+function getInteractionForZone(zone, hookContext) {
   if (!zone) return { action: '环顾四周', result: '这里是空旷的街道，没有什么特别的。' };
   const normalizedName = (zone.name || '').toLowerCase();
 
@@ -145,6 +145,18 @@ function getInteractionForZone(zone) {
   if (pluginManager && pluginManager.hasPlugins()) {
     const category = _resolveCategory(normalizedName);
     if (category) {
+      // 优先尝试交互钩子（精确匹配资源消耗的交互结果）
+      const hook = pluginManager.getInteractionHook(category);
+      if (hook && hookContext) {
+        try {
+          const hookResult = hook({ ...hookContext, zone, category });
+          if (hookResult) return hookResult;
+        } catch (err) {
+          console.error('[interact-hook] 插件钩子执行出错:', err.message || err);
+        }
+      }
+
+      // 回退到随机交互池
       const pluginPool = pluginManager.getInteractions(category);
       if (pluginPool.length > 0) {
         return pluginPool[Math.floor(Math.random() * pluginPool.length)];
@@ -671,7 +683,11 @@ function interact(playerId, item) {
   if (!player) return null;
   touchAction(playerId);
   const zone = getZoneAt(player.x, player.y);
-  const result = getInteractionForZone(zone);
+  const isNPC = !!player.isNPC;
+
+  // 构造钩子上下文，供插件精确匹配资源消耗
+  const hookContext = { playerId, playerName: player.name, isNPC };
+  const result = getInteractionForZone(zone, hookContext);
   player.interactionText = result.action;
   player.interactionIcon = result.icon || '';
   player.interactionSound = result.sound || 'interact';
@@ -693,7 +709,7 @@ function interact(playerId, item) {
     zone: zone ? zone.name : '小镇街道',
     action: result.action,
     result: result.result,
-    item: item || null,
+    item: result.item || item || null,
   };
   events.emit('interaction', entry);
   addActivity(playerId, { type: 'interact', text: `在${zone ? zone.name : '街道'}: ${result.action}` });
