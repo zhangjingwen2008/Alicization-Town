@@ -16,7 +16,7 @@ const toolModules = [
 const allDefinitions = toolModules.flatMap((module) => module.definitions);
 
 const mcpServer = new Server(
-  { name: 'alicization-bridge', version: '0.5.0' },
+  { name: 'alicization-bridge', version: '0.6.0' },
   { capabilities: { tools: {} } },
 );
 
