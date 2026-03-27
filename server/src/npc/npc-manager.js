@@ -5,8 +5,9 @@ const { NPC_PROFILES, NPC_ENABLED } = require('./npc-config');
 const { NpcBehavior } = require('./npc-behavior');
 
 class NpcManager {
-  constructor(worldEngine) {
+  constructor(worldEngine, pluginManager) {
     this.engine = worldEngine;
+    this.pluginManager = pluginManager || null;
     this.npcs = new Map(); // npcId → { config, behavior, timer }
     this.running = false;
   }
@@ -47,7 +48,7 @@ class NpcManager {
     // 更新区域信息以匹配实际坐标
     this.engine.refreshZoneInfo(config.id);
 
-    const behavior = new NpcBehavior(config, this.engine);
+    const behavior = new NpcBehavior(config, this.engine, this.pluginManager);
     const timer = this._scheduleNextAction(config, behavior);
 
     this.npcs.set(config.id, { config, behavior, timer });

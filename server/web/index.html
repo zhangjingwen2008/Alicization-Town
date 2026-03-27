@@ -102,6 +102,230 @@
   </div>
 
   <script src="js/game.js"></script>
+
+  <!-- Zone resource popup (shown when clicking a resource zone like restaurant/marketplace) -->
+  <div id="zone-popup" style="display:none; position:fixed; z-index:1000;">
+    <style>
+      #zone-popup {
+        background: #2a1f14;
+        border: 3px solid #8b6914;
+        border-radius: 4px;
+        padding: 0;
+        min-width: 220px;
+        max-width: 340px;
+        font-family: 'Pixelify Sans', sans-serif;
+        box-shadow: 0 0 0 1px #000, 0 6px 24px rgba(0,0,0,0.5);
+        image-rendering: pixelated;
+      }
+      #zone-popup .zone-popup-titlebar {
+        background: linear-gradient(180deg, #c9a23c 0%, #8b6914 100%);
+        color: #2a1f14;
+        font-size: 14px;
+        font-weight: bold;
+        padding: 6px 32px 6px 10px;
+        border-bottom: 2px solid #6b4f0e;
+        text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #zone-popup .zone-close {
+        position: absolute; top: 2px; right: 4px;
+        background: none; border: none; font-size: 20px;
+        cursor: pointer; color: #2a1f14; line-height: 1;
+        padding: 2px 6px;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #zone-popup .zone-close:hover { color: #fff; }
+
+      /* Inventory grid */
+      .zone-inv-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 8px;
+        justify-content: center;
+      }
+      .zone-inv-slot {
+        width: 80px;
+        background: #1a1208;
+        border: 2px solid #5a4210;
+        border-radius: 3px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 4px 6px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        position: relative;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .zone-inv-slot:hover {
+        border-color: #c9a23c;
+        background: #2e2010;
+      }
+      .zone-inv-slot:active {
+        background: #3a2a14;
+        border-color: #e8c84a;
+      }
+      .zone-inv-slot.adding {
+        animation: slotFlash 0.35s ease-out;
+      }
+      @keyframes slotFlash {
+        0% { background: #5a4a10; border-color: #ffe066; }
+        100% { background: #1a1208; border-color: #5a4210; }
+      }
+      .zone-inv-icon {
+        width: 32px;
+        height: 32px;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        pointer-events: none;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+      }
+      .zone-inv-label {
+        font-size: 11px;
+        color: #d4b96a;
+        margin-top: 4px;
+        text-align: center;
+        line-height: 1.1;
+        pointer-events: none;
+      }
+      .zone-inv-count {
+        font-size: 13px;
+        color: #fff;
+        font-weight: bold;
+        margin-top: 2px;
+        pointer-events: none;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      }
+      .zone-inv-count.zero { color: #664430; }
+      .zone-inv-plus {
+        font-size: 10px;
+        color: #8b6914;
+        margin-top: 2px;
+        pointer-events: none;
+      }
+
+      .zone-popup-footer {
+        padding: 4px 8px 6px;
+        text-align: center;
+        font-size: 11px;
+        color: #6b5a30;
+        border-top: 1px solid #3a2a14;
+      }
+
+      #zone-popup .zone-msg {
+        text-align: center;
+        font-size: 12px;
+        color: #c9a23c;
+        min-height: 16px;
+        padding: 0 8px 6px;
+      }
+
+      /* No-data states */
+      .zone-inv-empty {
+        color: #6b5a30;
+        font-size: 13px;
+        padding: 20px 16px;
+        text-align: center;
+        line-height: 1.5;
+      }
+      .zone-inv-empty a { color: #c9a23c; }
+
+      /* Mobile: bottom drawer */
+      @media (max-width: 600px) {
+        #zone-popup {
+          left: 0 !important; right: 0 !important; bottom: 0 !important;
+          top: auto !important;
+          min-width: 0; max-width: none; width: 100%;
+          border-radius: 8px 8px 0 0;
+          border-bottom: none;
+          padding-bottom: env(safe-area-inset-bottom, 8px);
+          box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+          animation: zoneSlideUp 0.2s ease-out;
+        }
+        .zone-inv-slot { width: 86px; padding: 10px 4px 8px; }
+        .zone-inv-icon { width: 36px; height: 36px; }
+        .zone-inv-label { font-size: 12px; }
+        .zone-inv-count { font-size: 14px; }
+        .zone-popup-titlebar { font-size: 16px; padding: 8px 36px 8px 12px; }
+        #zone-popup .zone-close { font-size: 24px; top: 4px; right: 8px; }
+        @keyframes zoneSlideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+      }
+
+      /* Shrine ghost stories */
+      .shrine-stories {
+        padding: 8px;
+        max-height: 180px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #5a3a6a transparent;
+      }
+      .shrine-empty {
+        color: #7a6a8a;
+        font-size: 13px;
+        padding: 16px;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .shrine-story {
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(120,90,150,0.2);
+      }
+      .shrine-story-text {
+        color: #d4c8e0;
+        font-size: 13px;
+        line-height: 1.4;
+        display: block;
+      }
+      .shrine-story-meta {
+        color: #6a5a7a;
+        font-size: 10px;
+        display: block;
+        margin-top: 2px;
+      }
+      .shrine-input-row {
+        display: flex;
+        gap: 4px;
+        padding: 6px 8px 8px;
+        border-top: 1px solid #3a2a44;
+      }
+      .shrine-input {
+        flex: 1;
+        background: #1a1024;
+        border: 1px solid #5a3a6a;
+        border-radius: 3px;
+        color: #d4c8e0;
+        font-family: 'Pixelify Sans', sans-serif;
+        font-size: 12px;
+        padding: 4px 8px;
+        outline: none;
+      }
+      .shrine-input:focus { border-color: #8a6aaa; }
+      .shrine-input::placeholder { color: #5a4a6a; }
+      .shrine-submit {
+        background: linear-gradient(180deg, #6a4a8a 0%, #4a2a6a 100%);
+        border: 1px solid #5a3a7a;
+        border-radius: 3px;
+        color: #e0d4f0;
+        font-family: 'Pixelify Sans', sans-serif;
+        font-size: 12px;
+        padding: 4px 10px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .shrine-submit:hover { background: linear-gradient(180deg, #7a5a9a 0%, #5a3a7a 100%); }
+      .shrine-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+    <div class="zone-popup-titlebar"><span id="zone-popup-title"></span></div>
+    <button class="zone-close" onclick="closeZonePopup()">&times;</button>
+    <div id="zone-popup-content"></div>
+    <div class="zone-msg" id="zone-popup-msg"></div>
+  </div>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>

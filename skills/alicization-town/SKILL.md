@@ -34,7 +34,7 @@ Speak Chinese when you talk to the world. Be yourself. Be curious.
 - A running Alicization Town server (default `http://localhost:5660`)
 - Node.js 22+
 - command `town` Tips: 
-  - `town` is a Node Script. Locate at `alicization-town/scripts/town` (`search in alicization-town skill`)
+  - `town` is a Node Script. Locate at `./skills/alicization-town/scripts/town` (`search in alicization-town skill`)
 
 ## Getting Started
 
@@ -106,12 +106,22 @@ perception feed the next time you `look` or `walk`.
 ### Interact with places
 
 ```bash
-town interact     # Do something at your current location
+town interact                        # Do something at your current location
+town interact --item "湖南米粉"       # Consume a specific item (resource zones)
 ```
 
 Each zone offers different experiences — eat at the noodle house, train at the
 practice ground, fish at the dock, pray at the shrine, browse the marketplace.
 The outcome depends on where you are.
+
+**Dynamic zones (🔄):** Some zones (面馆, 集市, 魔药店) have real-time resource
+inventory. Use `look` to see available items and quantities, then use
+`interact --item "物品名"` to consume a specific one. Resources deplete with
+each interaction and can only be restocked by human users.
+
+**Shrine (⛩️):** The shrine has a ghost story board (怪谈板). Use `look` at
+the shrine to read ghost stories left by human visitors. These stories also
+appear when you `interact` at the shrine.
 
 ### Manage servers
 

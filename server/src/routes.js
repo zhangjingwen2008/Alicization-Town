@@ -125,7 +125,8 @@ router.post('/chat', requireSession, async (req, res) => {
 router.post('/interact', requireSession, async (req, res) => {
   const release = await actionLock.acquire(req.requestHandle.playerId);
   try {
-    const result = worldEngine.interact(req.requestHandle.playerId);
+    const { item } = req.body || {};
+    const result = worldEngine.interact(req.requestHandle.playerId, item || null);
     if (!result) return res.status(404).json({ error: '玩家不存在' });
     res.json({ ...result, perceptions: req.drainPerceptions(), newMessages: req.drainNewMessages() });
   } finally { release(); }
@@ -189,4 +190,12 @@ router.get('/chat', maybeSession, (req, res) => {
   res.json({ messages: filtered, cursor });
 });
 
+// ── 插件信息端点 ─────────────────────────────────────────────────────────────
+router.get('/plugins', (_req, res) => {
+  const pluginManager = _req.app.locals.pluginManager;
+  if (!pluginManager) return res.json({ plugins: [] });
+  res.json({ plugins: pluginManager.listPlugins() });
+});
+
 module.exports = router;
+module.exports.requireSession = requireSession;

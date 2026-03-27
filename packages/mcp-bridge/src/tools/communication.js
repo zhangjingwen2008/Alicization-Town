@@ -40,7 +40,47 @@ async function handle(name, args, client) {
       return { content: [{ type: 'text', text: auth?.message || '当前还没有可用 profile，请先 login。' }] };
     }
     const perceptionText = client.formatPerceptions(result.perceptions);
-    return { content: [{ type: 'text', text: client.formatLook(result) + perceptionText }] };
+
+    // 如果当前在资源区域，附加资源库存信息和交互提示
+    let resourceText = '';
+    if (result.player?.zone) {
+      const zoneRes = await client.getZoneResources(result.player.zone);
+      if (zoneRes && zoneRes.hasResources && zoneRes.resources) {
+        resourceText = '\n\n🏪 【当前区域可消耗资源】\n';
+        const available = zoneRes.resources.filter(r => r.current > 0);
+        const empty = zoneRes.resources.filter(r => r.current <= 0);
+        if (available.length > 0) {
+          for (const r of available) {
+            resourceText += `  • ${r.label}: ${r.current}${r.unit}剩余\n`;
+          }
+          resourceText += '💡 使用 interact(item: "物品名") 可指定消耗，如 interact(item: "' + available[0].label + '")\n';
+        }
+        if (empty.length > 0) {
+          resourceText += `  ⚠️ 已售罄: ${empty.map(r => r.label).join('、')}\n`;
+        }
+        if (available.length === 0) {
+          resourceText += '  ⚠️ 所有物品已售罄，需要用户补充！\n';
+        }
+      }
+    }
+
+    // 如果当前在神社，附加怪谈板内容
+    let shrineText = '';
+    if (result.player?.zone && /shrine|神社/i.test(result.player.zone)) {
+      try {
+        const stories = await client.getGhostStories();
+        if (stories.length > 0) {
+          shrineText = '\n\n👻 【神社怪谈板】\n';
+          for (const s of stories) {
+            shrineText += `  • "${s.text}" — ${s.author}\n`;
+          }
+        } else {
+          shrineText = '\n\n👻 【神社怪谈板】\n  （还没有怪谈，等待人类投稿…）\n';
+        }
+      } catch {}
+    }
+
+    return { content: [{ type: 'text', text: client.formatLook(result) + resourceText + shrineText + perceptionText }] };
   }
 
   return null;

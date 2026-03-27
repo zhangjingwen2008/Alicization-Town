@@ -39,6 +39,13 @@ const playerActivities = {};
 const walkAborts = new Map();
 const events = new EventEmitter();
 
+/** @type {import('./plugin-manager').PluginManager|null} */
+let pluginManager = null;
+
+function setPluginManager(pm) {
+  pluginManager = pm;
+}
+
 function deriveHandle(publicKey) {
   return `at_${crypto.createHash('sha256').update(publicKey).digest('hex').slice(0, 24)}`;
 }
@@ -130,10 +137,35 @@ function getZoneAt(gridX, gridY) {
   return closest;
 }
 
-function getInteractionForZone(zone) {
+function getInteractionForZone(zone, hookContext) {
   if (!zone) return { action: '环顾四周', result: '这里是空旷的街道，没有什么特别的。' };
-  const zoneType = zone.type || 'building';
   const normalizedName = (zone.name || '').toLowerCase();
+
+  // ── 插件路径：优先从 pluginManager 获取交互 ───────────────────────────
+  if (pluginManager && pluginManager.hasPlugins()) {
+    const category = _resolveCategory(normalizedName);
+    if (category) {
+      // 优先尝试交互钩子（精确匹配资源消耗的交互结果）
+      const hook = pluginManager.getInteractionHook(category);
+      if (hook && hookContext) {
+        try {
+          const hookResult = hook({ ...hookContext, zone, category });
+          if (hookResult) return hookResult;
+        } catch (err) {
+          console.error('[interact-hook] 插件钩子执行出错:', err.message || err);
+        }
+      }
+
+      // 回退到随机交互池
+      const pluginPool = pluginManager.getInteractions(category);
+      if (pluginPool.length > 0) {
+        return pluginPool[Math.floor(Math.random() * pluginPool.length)];
+      }
+    }
+  }
+
+  // ── Legacy 路径：直接使用硬编码数据 ────────────────────────────────────
+  const zoneType = zone.type || 'building';
   let category = null;
   for (const [matcher, matchedCategory] of ZONE_CATEGORY_MAP) {
     if (matcher.test(normalizedName)) {
@@ -144,6 +176,25 @@ function getInteractionForZone(zone) {
   const pool = ZONE_INTERACTIONS[zoneType]?.[category];
   if (!pool) return { action: '四处看看', result: `你仔细观察了${zone.name}，感受着这里的氛围。` };
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * 从插件 zone matchers 和 legacy matchers 中解析分类名。
+ * 插件 matchers 优先（允许覆盖）。
+ */
+function _resolveCategory(normalizedName) {
+  // 先查插件注册的 matchers
+  if (pluginManager) {
+    const pluginMatchers = pluginManager.getZoneMatchers();
+    for (const [matcher, category] of pluginMatchers) {
+      if (matcher.test(normalizedName)) return category;
+    }
+  }
+  // fallback 到内置 matchers
+  for (const [matcher, category] of ZONE_CATEGORY_MAP) {
+    if (matcher.test(normalizedName)) return category;
+  }
+  return null;
 }
 
 function zoneInfo(player) {
@@ -207,6 +258,13 @@ function addActivity(playerId, activity) {
   if (player) {
     events.emit('activity', { id: playerId, name: player.name, sprite: player.sprite, activities: list });
   }
+}
+
+/**
+ * 供插件推送活动记录（通过 pluginManager.setActivityEmitter 调用）
+ */
+function recordPluginActivity(playerId, text, type) {
+  addActivity(playerId, { type: type || 'plugin', text });
 }
 
 function broadcast() {
@@ -620,12 +678,16 @@ function chat(playerId, text) {
   return { ok: true };
 }
 
-function interact(playerId) {
+function interact(playerId, item) {
   const player = players[playerId];
   if (!player) return null;
   touchAction(playerId);
   const zone = getZoneAt(player.x, player.y);
-  const result = getInteractionForZone(zone);
+  const isNPC = !!player.isNPC;
+
+  // 构造钩子上下文，供插件精确匹配资源消耗
+  const hookContext = { playerId, playerName: player.name, isNPC, item };
+  const result = getInteractionForZone(zone, hookContext);
   player.interactionText = result.action;
   player.interactionIcon = result.icon || '';
   player.interactionSound = result.sound || 'interact';
@@ -641,10 +703,13 @@ function interact(playerId) {
   }, INTERACTION_TTL_MS);
   const entry = {
     time: Date.now(),
+    playerId,
     name: player.name,
+    isNPC: !!player.isNPC,
     zone: zone ? zone.name : '小镇街道',
     action: result.action,
     result: result.result,
+    item: result.item || item || null,
   };
   events.emit('interaction', entry);
   addActivity(playerId, { type: 'interact', text: `在${zone ? zone.name : '街道'}: ${result.action}` });
@@ -704,6 +769,7 @@ module.exports = {
   init,
   events,
   perception,
+  setPluginManager,
   createProfile,
   loginProfile,
   heartbeat,
@@ -729,5 +795,6 @@ module.exports = {
   getWorldMap: () => worldMap,
   drainChat,
   refreshZoneInfo,
+  recordPluginActivity,
   shutdown,
 };

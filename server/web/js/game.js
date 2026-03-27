@@ -178,7 +178,18 @@
         if (hoveredPlayerId && clientPlayers[hoveredPlayerId]) {
           selectAndFollowPlayer(hoveredPlayerId);
         } else {
-          isCameraFollowing = false;
+          // Check if clicked on a clickable zone
+          const clickedZone = getZoneAtMouse();
+          if (clickedZone && isClickableZone(clickedZone.name)) {
+            if (isShrineZone(clickedZone.name)) {
+              showShrinePopup(clickedZone.name, e.clientX, e.clientY);
+            } else {
+              showZonePopup(clickedZone.name, e.clientX, e.clientY);
+            }
+          } else {
+            closeZonePopup();
+            isCameraFollowing = false;
+          }
         }
       } else {
         isCameraFollowing = false;
@@ -278,6 +289,17 @@
         canvas.classList.remove('dragging');
         if (!dragMoved && hoveredPlayerId && clientPlayers[hoveredPlayerId]) {
           selectAndFollowPlayer(hoveredPlayerId);
+        } else if (!dragMoved) {
+          // Check if tapped on a resource zone
+          const tappedZone = getZoneAtMouse();
+          if (tappedZone && isResourceZone(tappedZone.name)) {
+            const rect = canvas.getBoundingClientRect();
+            const sx = mouseScreenX / canvas.width * rect.width + rect.left;
+            const sy = mouseScreenY / canvas.height * rect.height + rect.top;
+            showZonePopup(tappedZone.name, sx, sy);
+          } else {
+            closeZonePopup();
+          }
         } else if (dragMoved) {
           isCameraFollowing = false;
         }
@@ -872,11 +894,18 @@
           const sx2=TILE_SIZE/mapData.tilewidth,sy2=TILE_SIZE/mapData.tileheight;
           const rx=zone.x*sx2,ry=zone.y*sy2,rw=zone.width*sx2,rh=zone.height*sy2;
           if(mouseX>=rx&&mouseX<=rx+rw&&mouseY>=ry&&mouseY<=ry+rh){
+            const isResZone = isClickableZone(zone.name);
+            const suffix = isResZone ? ' [点击查看]' : '';
             ctx.font='bold 16px "Pixelify Sans",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-            const tw=ctx.measureText(zone.name).width+20,th=35,tx=mouseX-15,ty=mouseY-30;
+            const nameText = zone.name + suffix;
+            const tw=ctx.measureText(nameText).width+20,th=isResZone?42:35,tx=mouseX-15,ty=mouseY-30;
             ctx.fillStyle='rgba(255,255,255,0.92)'; ctx.beginPath(); ctx.roundRect(tx,ty,tw,th,8); ctx.fill();
-            ctx.strokeStyle='#f39c12'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
-            ctx.fillStyle='#5c4a3d'; ctx.fillText(zone.name,tx+tw/2,ty+th/2);
+            ctx.strokeStyle=isResZone?'#e67e22':'#f39c12'; ctx.lineWidth=2/camera.zoom; ctx.stroke();
+            ctx.fillStyle='#5c4a3d'; ctx.fillText(zone.name,tx+tw/2,ty+th/2-(isResZone?8:0));
+            if(isResZone){
+              ctx.font='11px "Pixelify Sans",sans-serif'; ctx.fillStyle='#e67e22';
+              ctx.fillText('[点击查看]',tx+tw/2,ty+th/2+10);
+            }
           }
         });
       }
@@ -1077,6 +1106,337 @@
       el.innerHTML=html||'<span id="stats-empty">Waiting for data...</span>';
     }
     setInterval(updateStatsPanel, 3000);
+
+    // ==========================================
+    // === Zone 资源交互系统 ===
+    // ==========================================
+    let zoneResourceData = {};  // zoneId → { category, zoneName, resources }
+    let hoveredZoneName = null; // 当前鼠标悬停的 zone 名称
+    let rpgPluginAvailable = null; // null=未知, true=可用, false=不可用
+
+    // 判断 zone 名称是否属于有资源的类型
+    const RESOURCE_ZONE_PATTERNS = [
+      /面馆|noodle|restaurant/i,
+      /集市|market/i,
+      /药水|potion|magic|魔药/i,
+    ];
+    function isResourceZone(name) {
+      return RESOURCE_ZONE_PATTERNS.some(p => p.test(name || ''));
+    }
+
+    // 判断是否为神社区域
+    function isShrineZone(name) {
+      return /shrine|神社/i.test(name || '');
+    }
+
+    // 判断是否可以弹出面板的区域（资源区 + 神社）
+    function isClickableZone(name) {
+      return isResourceZone(name) || isShrineZone(name);
+    }
+
+    // 拉取 zone 资源数据（静默失败，插件未加载时不影响）
+    function fetchZoneResources() {
+      fetch('/api/rpg/zones/resources')
+        .then(r => {
+          if (r.ok) { rpgPluginAvailable = true; return r.json(); }
+          rpgPluginAvailable = false;
+          console.log('[rpg] fetchZoneResources: HTTP', r.status);
+          return null;
+        })
+        .then(data => {
+          if (data) {
+            zoneResourceData = data;
+            console.log('[rpg] zoneResourceData updated:', Object.keys(data).length, 'zones');
+          }
+        })
+        .catch((e) => { rpgPluginAvailable = false; console.log('[rpg] fetchZoneResources error:', e.message); });
+    }
+    // 启动后定时刷新资源数据
+    fetchZoneResources();
+    setInterval(fetchZoneResources, 10000);
+
+    // 根据 zone 名称查找对应的资源数据（先精确匹配，再按类别模糊匹配）
+    function findResourceByZoneName(zoneName) {
+      // 精确匹配
+      for (const [zoneId, data] of Object.entries(zoneResourceData)) {
+        if (data.zoneName === zoneName) return { zoneId, ...data };
+      }
+      // 模糊匹配：用 RESOURCE_ZONE_PATTERNS 推断类别
+      const CATEGORY_MAP = [
+        [/面馆|noodle|restaurant/i, 'restaurant'],
+        [/集市|market/i, 'marketplace'],
+        [/药水|potion|magic|魔药/i, 'potion'],
+      ];
+      let targetCat = null;
+      for (const [pat, cat] of CATEGORY_MAP) {
+        if (pat.test(zoneName)) { targetCat = cat; break; }
+      }
+      if (targetCat) {
+        for (const [zoneId, data] of Object.entries(zoneResourceData)) {
+          if (data.category === targetCat) return { zoneId, ...data };
+        }
+      }
+      return null;
+    }
+
+    // 检测点击位置是否命中某个 zone
+    function getZoneAtMouse() {
+      if (!mapData || mouseX < 0) return null;
+      const zl = mapData.layers.find(l => l.type === 'objectgroup');
+      if (!zl || !zl.objects) return null;
+      const sx2 = TILE_SIZE / mapData.tilewidth, sy2 = TILE_SIZE / mapData.tileheight;
+      for (const zone of zl.objects) {
+        const rx = zone.x * sx2, ry = zone.y * sy2;
+        const rw = zone.width * sx2, rh = zone.height * sy2;
+        if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
+          return zone;
+        }
+      }
+      return null;
+    }
+
+    // === Zone Popup 交互函数 ===
+    function showZonePopup(zoneName, screenX, screenY) {
+      const popup = document.getElementById('zone-popup');
+      const titleEl = document.getElementById('zone-popup-title');
+      const contentEl = document.getElementById('zone-popup-content');
+      const msgEl = document.getElementById('zone-popup-msg');
+      if (!popup || !titleEl || !contentEl) return;
+
+      const resInfo = findResourceByZoneName(zoneName);
+      console.log('[rpg] showZonePopup:', zoneName, 'resInfo:', resInfo, 'rpgPluginAvailable:', rpgPluginAvailable);
+      titleEl.textContent = zoneName;
+      msgEl.textContent = '';
+
+      if (rpgPluginAvailable === false) {
+        contentEl.innerHTML = '<div class="zone-inv-empty">'
+          + '此功能需要 <b>RPG Advanced</b> 插件<br>'
+          + '<a href="https://github.com/ceresOPA/Alicization-Town" target="_blank">GitHub</a>'
+          + '</div>';
+      } else if (!resInfo) {
+        const hasAnyData = Object.keys(zoneResourceData).length > 0;
+        if (hasAnyData) {
+          contentEl.innerHTML = '<div class="zone-inv-empty">该区域暂无可用资源</div>';
+        } else {
+          contentEl.innerHTML = '<div class="zone-inv-empty">资源数据加载中…</div>';
+          fetchZoneResources();
+          setTimeout(() => {
+            const retryInfo = findResourceByZoneName(zoneName);
+            if (retryInfo) {
+              showZonePopup(zoneName, screenX, screenY);
+            } else if (contentEl) {
+              const stillEmpty = Object.keys(zoneResourceData).length === 0;
+              contentEl.innerHTML = '<div class="zone-inv-empty">' + (stillEmpty
+                ? '资源系统尚未就绪，请稍后再试'
+                : '该区域暂无可用资源') + '</div>';
+            }
+          }, 2500);
+        }
+      } else {
+        // Inventory grid rendering
+        const resEntries = Object.entries(resInfo.resources);
+        if (resEntries.length === 0) {
+          contentEl.innerHTML = '<div class="zone-inv-empty">该区域资源为空</div>';
+        } else {
+          let html = '<div class="zone-inv-grid">';
+          for (const [key, res] of resEntries) {
+            const iconName = res.icon || 'GoldCoin';
+            const countClass = res.current <= 0 ? 'zero' : '';
+            html += `<div class="zone-inv-slot" data-zone-id="${resInfo.zoneId}" data-res-key="${key}" title="点击补充 ${res.label}">`;
+            html += `  <img class="zone-inv-icon" src="assets/items/${iconName}.png" alt="${res.label}">`;
+            html += `  <span class="zone-inv-label">${res.label}</span>`;
+            html += `  <span class="zone-inv-count ${countClass}">&times;${res.current}</span>`;
+            html += `  <span class="zone-inv-plus">点击+1</span>`;
+            html += `</div>`;
+          }
+          html += '</div>';
+          html += '<div class="zone-popup-footer">点击物品补充资源</div>';
+          contentEl.innerHTML = html;
+
+          // Bind click events on slots
+          contentEl.querySelectorAll('.zone-inv-slot').forEach(slot => {
+            slot.addEventListener('click', (e) => {
+              e.stopPropagation();
+              supplyZone(slot.dataset.zoneId, slot.dataset.resKey, slot);
+            });
+          });
+        }
+      }
+
+      // 定位弹窗：移动端用底部抽屉（CSS 控制），桌面端靠近点击位置
+      popup.style.display = 'block';
+      const isMobile = window.innerWidth <= 600;
+      if (isMobile) {
+        // CSS @media 接管定位，清除内联样式
+        popup.style.left = '';
+        popup.style.top = '';
+      } else {
+        const popW = popup.offsetWidth, popH = popup.offsetHeight;
+        let left = screenX + 12, top = screenY - popH / 2;
+        if (left + popW > window.innerWidth - 10) left = screenX - popW - 12;
+        if (top < 10) top = 10;
+        if (top + popH > window.innerHeight - 10) top = window.innerHeight - popH - 10;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+      }
+    }
+
+    function closeZonePopup() {
+      const popup = document.getElementById('zone-popup');
+      if (popup) popup.style.display = 'none';
+    }
+
+    function supplyZone(zoneId, resourceType, slotEl) {
+      const msgEl = document.getElementById('zone-popup-msg');
+      if (!slotEl) return;
+      // Prevent rapid clicks
+      if (slotEl.dataset.busy === '1') return;
+      slotEl.dataset.busy = '1';
+
+      fetch(`/api/rpg/zones/${encodeURIComponent(zoneId)}/supply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resourceType: resourceType, amount: 1 }),
+      })
+        .then(r => {
+          if (!r.ok) return r.text().then(() => { throw new Error('HTTP ' + r.status); });
+          return r.json();
+        })
+        .then(data => {
+          if (data.success) {
+            // Flash animation
+            slotEl.classList.remove('adding');
+            void slotEl.offsetWidth; // reflow to retrigger
+            slotEl.classList.add('adding');
+            // Update count in-place
+            const countEl = slotEl.querySelector('.zone-inv-count');
+            if (countEl) {
+              countEl.textContent = '\u00d7' + data.current;
+              countEl.classList.remove('zero');
+            }
+            // Update cache
+            if (zoneResourceData[zoneId]?.resources?.[resourceType]) {
+              zoneResourceData[zoneId].resources[resourceType].current = data.current;
+            }
+            if (msgEl) msgEl.textContent = data.message || '补充成功！';
+            setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 2000);
+          } else {
+            if (msgEl) msgEl.textContent = data.error || '补充失败';
+          }
+        })
+        .catch((err) => {
+          console.error('[rpg] supply error:', err);
+          if (msgEl) msgEl.textContent = '请求失败，请确认 RPG 插件已加载';
+        })
+        .finally(() => {
+          slotEl.dataset.busy = '0';
+        });
+    }
+
+    // === 神社怪谈 Popup ===
+    function showShrinePopup(zoneName, screenX, screenY) {
+      const popup = document.getElementById('zone-popup');
+      const titleEl = document.getElementById('zone-popup-title');
+      const contentEl = document.getElementById('zone-popup-content');
+      const msgEl = document.getElementById('zone-popup-msg');
+      if (!popup || !titleEl || !contentEl) return;
+
+      titleEl.textContent = zoneName + ' — 怪谈板';
+      if (msgEl) msgEl.textContent = '';
+
+      contentEl.innerHTML = '<div class="zone-inv-empty">加载中…</div>';
+
+      // Position popup first
+      popup.style.display = 'block';
+      const isMobile = window.innerWidth <= 600;
+      if (isMobile) {
+        popup.style.left = ''; popup.style.top = '';
+      } else {
+        const popW = popup.offsetWidth, popH = popup.offsetHeight;
+        let left = screenX + 12, top = screenY - popH / 2;
+        if (left + popW > window.innerWidth - 10) left = screenX - popW - 12;
+        if (top < 10) top = 10;
+        if (top + popH > window.innerHeight - 10) top = window.innerHeight - popH - 10;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+      }
+
+      fetch('/api/rpg/shrine/stories')
+        .then(r => {
+          if (!r.ok) {
+            // 插件未加载时 404
+            contentEl.innerHTML = '<div class="zone-inv-empty">'
+              + '此功能需要 <b>RPG Advanced</b> 插件<br>'
+              + '<a href="https://github.com/ceresOPA/Alicization-Town" target="_blank">GitHub</a>'
+              + '</div>';
+            return null;
+          }
+          return r.json();
+        })
+        .then(data => { if (data) renderShrineContent(contentEl, msgEl, data.stories || []); })
+        .catch(() => {
+          contentEl.innerHTML = '<div class="zone-inv-empty">'
+            + '此功能需要 <b>RPG Advanced</b> 插件<br>'
+            + '<a href="https://github.com/ceresOPA/Alicization-Town" target="_blank">GitHub</a>'
+            + '</div>';
+        });
+    }
+
+    function renderShrineContent(contentEl, msgEl, stories) {
+      let html = '<div class="shrine-stories">';
+      if (stories.length === 0) {
+        html += '<div class="shrine-empty">还没有怪谈…<br>成为第一个讲述者吧</div>';
+      } else {
+        for (const s of stories) {
+          const t = new Date(s.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          html += '<div class="shrine-story">';
+          html += `<span class="shrine-story-text">${escapeHtml(s.text)}</span>`;
+          html += `<span class="shrine-story-meta">— ${escapeHtml(s.author)} ${t}</span>`;
+          html += '</div>';
+        }
+      }
+      html += '</div>';
+      html += '<div class="shrine-input-row">';
+      html += '<input class="shrine-input" type="text" maxlength="200" placeholder="写下你的怪谈…">';
+      html += '<button class="shrine-submit">投稿</button>';
+      html += '</div>';
+      contentEl.innerHTML = html;
+
+      const input = contentEl.querySelector('.shrine-input');
+      const btn = contentEl.querySelector('.shrine-submit');
+      function submitStory() {
+        const text = (input.value || '').trim();
+        if (!text) return;
+        btn.disabled = true;
+        fetch('/api/rpg/shrine/stories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data && data.ok) {
+              renderShrineContent(contentEl, msgEl, data.stories);
+              if (msgEl) { msgEl.textContent = '怪谈已记录'; setTimeout(() => { msgEl.textContent = ''; }, 2000); }
+            } else {
+              if (msgEl) msgEl.textContent = '投稿失败';
+            }
+          })
+          .catch(() => { if (msgEl) msgEl.textContent = '请求失败'; })
+          .finally(() => { btn.disabled = false; });
+      }
+      btn.addEventListener('click', submitStory);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitStory(); });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // 暴露到全局作用域（供 HTML onclick 调用）
+    window.showZonePopup = showZonePopup;
+    window.closeZonePopup = closeZonePopup;
+    window.supplyZone = supplyZone;
 
     // 页面脚本只启动一次，真正的重连交给 EventSource 自己处理。
     initialize();

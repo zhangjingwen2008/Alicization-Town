@@ -121,13 +121,114 @@ async function sendChat(text) {
   return authenticatedRequest('POST', '/api/chat', { text });
 }
 
-async function interact() {
-  return authenticatedRequest('POST', '/api/interact');
+async function interact(item) {
+  const body = item ? { item } : undefined;
+  return authenticatedRequest('POST', '/api/interact', body);
 }
 
 async function setThinking(isThinking) {
   await authenticatedRequest('PUT', '/api/status', { isThinking });
 }
+
+/**
+ * 查询 RPG 属性（需要 RPG 插件支持，优雅降级）
+ * @returns {string} 格式化后的属性文本
+ */
+async function getRpgAttrs() {
+  try {
+    const { auth, result } = await authenticatedRequest('GET', '/api/rpg/attrs');
+    if (!result) {
+      return auth?.message || '当前还没有可用 profile，请先 login。';
+    }
+    return formatRpgAttrs(result);
+  } catch (err) {
+    // 插件未安装时请求会 404
+    if (err.statusCode === 404 || err.message?.includes('404')) {
+      return '⚙️ 属性系统需要 RPG Advanced 插件支持。当前服务器未安装该插件，请联系服务器管理员了解详情。';
+    }
+    return '⚙️ 属性系统暂时不可用，请稍后再试。';
+  }
+}
+
+/**
+ * 查询指定区域的资源库存（RPG 插件，优雅降级）
+ * @param {string} zoneName - 区域名称
+ * @returns {object|null} { hasResources, available, resources, zoneName, zoneId, category } or null
+ */
+async function getZoneResources(zoneName) {
+  try {
+    const { result } = await authenticatedRequest('GET', `/api/rpg/zone-check?zone=${encodeURIComponent(zoneName)}`);
+    return result || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 查询所有区域的资源库存（RPG 插件，优雅降级）
+ * @returns {object|null} { [zoneId]: { zoneName, resources: { [type]: { label, current, max, unit } } } }
+ */
+async function getAllZoneResources() {
+  try {
+    const { result } = await authenticatedRequest('GET', '/api/rpg/zones/resources');
+    return result || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 查询神社怪谈（优雅降级）
+ * @returns {Array} ghost stories array
+ */
+async function getGhostStories() {
+  try {
+    const { result } = await authenticatedRequest('GET', '/api/rpg/shrine/stories');
+    return (result && result.stories) || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 格式化 RPG 属性数据为可读文本
+ */
+function formatRpgAttrs(data) {
+  if (!data || !data.attrs) {
+    return '⚙️ 属性系统需要 RPG Advanced 插件支持。当前服务器未安装该插件，请联系服务器管理员了解详情。';
+  }
+
+  let text = '📊 【我的状态】\n';
+  const attrLabels = {
+    hp: '❤️ 生命',
+    hunger: '🍜 饱腹',
+    mood: '😊 心情',
+    energy: '⚡ 精力',
+    social: '💬 社交',
+    age: '📅 年龄',
+  };
+
+  for (const [key, info] of Object.entries(data.attrs)) {
+    const label = attrLabels[key] || key;
+    const bar = makeBar(info.value, info.max || 100);
+    text += `${label}: ${info.value}/${info.max || 100} ${bar} (${info.label})\n`;
+  }
+
+  if (data.suggestions && data.suggestions.length > 0) {
+    text += '\n💡 【行动建议】\n';
+    for (const s of data.suggestions) {
+      text += `• ${s}\n`;
+    }
+  }
+
+  return text.trimEnd();
+}
+
+function makeBar(value, max) {
+  const pct = Math.round((value / max) * 10);
+  return '█'.repeat(pct) + '░'.repeat(10 - pct);
+}
+
 
 async function getChat(since, limit) {
   const params = new URLSearchParams();
@@ -164,6 +265,10 @@ module.exports = {
   getChat,
   flushContext,
   setThinking,
+  getRpgAttrs,
+  getZoneResources,
+  getAllZoneResources,
+  getGhostStories,
   stringifyResult: townClient.stringifyResult,
   formatLogin: townClient.formatLogin,
   formatProfilesList: townClient.formatProfilesList,

@@ -1,14 +1,17 @@
 // NPC 行为引擎
 // 管理单个 NPC 的状态机与自主行为决策
+// 支持插件策略：如果 NPC 配置了 strategy 字段且 pluginManager 有对应策略，
+// 则使用插件策略；否则 fallback 到内置的加权随机逻辑。
 
 /**
  * NPC 行为状态机
  * 状态: idle → walking / chatting / interacting → idle
  */
 class NpcBehavior {
-  constructor(config, worldEngine) {
+  constructor(config, worldEngine, pluginManager) {
     this.config = config;
     this.engine = worldEngine;
+    this.pluginManager = pluginManager || null;
     this.playerId = config.id;
     this.lastGreetedPlayers = new Map();
     this.greetCooldownMs = 60_000;
@@ -24,6 +27,30 @@ class NpcBehavior {
 
     // 刷新心跳，确保 NPC 不会被标记为 offline/idle
     this.engine.touchAction(this.playerId);
+
+    // ── 插件策略路径 ─────────────────────────────────────────────────────
+    const strategyName = this.config.strategy || 'base/weighted-random';
+    if (this.pluginManager) {
+      const strategyFn = this.pluginManager.getNpcStrategy(strategyName);
+      if (strategyFn) {
+        const nearbyPlayers = this._getNearbyHumanPlayers(player);
+        const result = await strategyFn({
+          npc: player,
+          config: this.config,
+          nearbyPlayers,
+          engine: {
+            chat: (id, text) => this.engine.chat(id, text),
+            move: (id, target) => this.engine.move(id, target),
+            interact: (id) => this.engine.interact(id),
+            readMap: () => this.engine.readMap(),
+          },
+          greetHistory: this.lastGreetedPlayers,
+        });
+        return result;
+      }
+    }
+
+    // ── Legacy 路径：内置行为逻辑 ────────────────────────────────────────
 
     // 优先检查：附近有真人玩家时，优先打招呼
     const greetResult = this._tryGreetNearbyPlayer(player);
@@ -42,6 +69,21 @@ class NpcBehavior {
       default:
         return { action: 'idle', detail: '静静站着' };
     }
+  }
+
+  /**
+   * 获取附近的非 NPC 真人玩家列表
+   */
+  _getNearbyHumanPlayers(npcPlayer) {
+    const allPlayers = this.engine.getAllPlayers();
+    const nearby = [];
+    for (const [id, other] of Object.entries(allPlayers)) {
+      if (id === this.playerId) continue;
+      if (other.isNPC) continue;
+      if (other.name === 'Observer') continue;
+      nearby.push(other);
+    }
+    return nearby;
   }
 
   /**

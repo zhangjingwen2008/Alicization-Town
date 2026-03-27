@@ -41,6 +41,10 @@ async function main() {
       await require('./lib/act').interact(args);
       break;
 
+    case 'status':
+      await require('./lib/act').status();
+      break;
+
     case 'server':
       require('./lib/server').server(args);
       break;
@@ -72,7 +76,8 @@ async function main() {
 动作:
   walk --to <id> | --x <X> --y <Y> | --forward <N> --right <N>
   chat --text <MESSAGE>
-  interact
+  interact [--item <物品名>]       与当前区域互动（可指定物品）
+  status                           查看身体状态（需要 RPG 插件）
 `);
   }
 }
