@@ -685,14 +685,71 @@
     // ==========================================
     // === 绘制瓦片 ===
     // ==========================================
+    // Tiled GID flip/rotation flags
+    const FLIPPED_HORIZONTALLY = 0x40000000;
+    const FLIPPED_VERTICALLY   = 0x80000000;
+    const ROTATED_90           = 0x20000000;
+
     function drawTile(gid,x,y){
       if(gid===0) return;
-      const ts=mapData.tilesets.slice().reverse().find(t=>gid>=t.firstgid);
+
+      // Extract flip/rotation flags from GID
+      const flippedH = (gid & FLIPPED_HORIZONTALLY) !== 0;
+      const flippedV = (gid & FLIPPED_VERTICALLY) !== 0;
+      const rotated  = (gid & ROTATED_90) !== 0;
+
+      // Get actual tile ID without flip/rotation bits
+      const cleanGid = gid & 0x1FFFFFFF;
+
+      const ts=mapData.tilesets.slice().reverse().find(t=>cleanGid>=t.firstgid);
       if(!ts) return;
       const imgName=ts.image.split('/').pop();
       if(!images[imgName]) return;
-      const localId=gid-ts.firstgid,cols=ts.columns;
-      ctx.drawImage(images[imgName],(localId%cols)*ts.tilewidth,Math.floor(localId/cols)*ts.tileheight,ts.tilewidth,ts.tileheight,x*TILE_SIZE,y*TILE_SIZE,TILE_SIZE,TILE_SIZE);
+      const localId=cleanGid-ts.firstgid,cols=ts.columns;
+
+      const sx = (localId%cols)*ts.tilewidth;
+      const sy = Math.floor(localId/cols)*ts.tileheight;
+      const sw = ts.tilewidth;
+      const sh = ts.tileheight;
+      const dx = x*TILE_SIZE;
+      const dy = y*TILE_SIZE;
+      const dw = TILE_SIZE;
+      const dh = TILE_SIZE;
+
+      // Tiled's rotation is 90° clockwise (bit 29). Canvas rotation is counter-clockwise,
+      // so we negate the angle. Also apply flips in the correct order.
+      if (flippedH || flippedV || rotated) {
+        ctx.save();
+        ctx.translate(dx + dw/2, dy + dh/2);
+
+        let r = 0;
+        if (rotated)  r += Math.PI / 2;   // +90° clockwise in Tiled = +90° counter-clockwise in canvas
+        if (flippedH && flippedV) r += Math.PI;  // 180° = H flip + V flip
+        if (flippedH && !flippedV) r += (rotated ? 0 : Math.PI);  // complex case
+
+        // More precise: combine H/V flip with rotation
+        // The actual transform: rotate first (if needed), then flip
+        ctx.rotate(r);
+
+        // Scale for flips - order matters
+        const sx2 = flippedH ? -1 : 1;
+        const sy2 = flippedV ? -1 : 1;
+        ctx.scale(sx2, sy2);
+
+        // If rotated 90° in Tiled (bit 29), and H flip, the result differs
+        // Tiled: rotation 90° CW + H flip = mirror across diagonal
+        // We handle the combined transform above, but still need to account for
+        // how rotated tiles affect the draw position
+
+        ctx.drawImage(
+          images[imgName],
+          sx, sy, sw, sh,
+          -dw/2, -dh/2, dw, dh
+        );
+        ctx.restore();
+      } else {
+        ctx.drawImage(images[imgName], sx, sy, sw, sh, dx, dy, dw, dh);
+      }
     }
 
     // ==========================================
