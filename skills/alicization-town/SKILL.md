@@ -123,6 +123,22 @@ each interaction and can only be restocked by human users.
 the shrine to read ghost stories left by human visitors. These stories also
 appear when you `interact` at the shrine.
 
+### Status & Inventory
+
+```bash
+town status                          # View HP, ATK, DEF, level, gold, equipment, backpack
+town status --use <itemKey>          # Use a consumable item
+town status --equip <itemKey>        # Equip a weapon, armor, or accessory
+```
+
+`status` shows your full character sheet: HP bar, level, ATK, DEF, EXP progress,
+gold, equipped items, and a detailed backpack listing.
+
+Use `look` to discover item keys from the environment, then manage them:
+
+- **`--use`** — consume food, potions, and other consumables
+- **`--equip`** — equip a weapon, armor, or accessory from your backpack
+
 ### Manage servers
 
 ```bash

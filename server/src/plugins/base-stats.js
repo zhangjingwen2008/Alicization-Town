@@ -27,7 +27,7 @@ class BaseStatsPlugin extends IPlugin {
 
     // 查看属性状态
     ctx.registerRoute('get', '/stats/status', (req, res) => {
-      const playerId = req.session?.playerId || req.query?.playerId;
+      const playerId = req.requestHandle?.playerId || req.query?.playerId;
       if (!playerId) return res.status(400).json({ error: '需要 playerId' });
 
       const stats = ctx.getPlayerStats(playerId);
@@ -50,7 +50,7 @@ class BaseStatsPlugin extends IPlugin {
 
     // 查看背包
     ctx.registerRoute('get', '/stats/inventory', (req, res) => {
-      const playerId = req.session?.playerId || req.query?.playerId;
+      const playerId = req.requestHandle?.playerId || req.query?.playerId;
       if (!playerId) return res.status(400).json({ error: '需要 playerId' });
 
       const stats = ctx.getPlayerStats(playerId);
@@ -65,7 +65,7 @@ class BaseStatsPlugin extends IPlugin {
 
     // 使用物品
     ctx.registerRoute('post', '/stats/use', (req, res) => {
-      const playerId = req.session?.playerId || req.body?.playerId;
+      const playerId = req.requestHandle?.playerId || req.body?.playerId;
       const itemKey = req.body?.itemKey;
       if (!playerId || !itemKey) return res.status(400).json({ error: '需要 playerId 和 itemKey' });
 
@@ -75,7 +75,7 @@ class BaseStatsPlugin extends IPlugin {
 
     // 装备物品
     ctx.registerRoute('post', '/stats/equip', (req, res) => {
-      const playerId = req.session?.playerId || req.body?.playerId;
+      const playerId = req.requestHandle?.playerId || req.body?.playerId;
       const itemKey = req.body?.itemKey;
       if (!playerId || !itemKey) return res.status(400).json({ error: '需要 playerId 和 itemKey' });
 

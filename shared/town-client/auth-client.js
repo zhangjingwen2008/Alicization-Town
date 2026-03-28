@@ -135,6 +135,7 @@ async function loginWithProfile(profile) {
     expiresAt: response.expires_at || new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
     leaseExpiresAt: response.lease_expires_at || null,
     lastUsedAt: new Date().toISOString(),
+    playerId: response.playerId || profile.playerId || null,
   };
 
   saveProfile(nextProfile, targetServerFp);
@@ -151,6 +152,7 @@ async function loginWithProfile(profile) {
     lease_expires_at: nextProfile.leaseExpiresAt,
     message: response.message,
     token: nextProfile.token,
+    playerId: nextProfile.playerId,
   };
 }
 
