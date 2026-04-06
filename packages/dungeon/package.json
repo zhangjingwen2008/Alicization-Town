@@ -1,0 +1,17 @@
+{
+  "name": "@alicization/dungeon",
+  "version": "0.1.0",
+  "description": "Roguelike dungeon system plugin for Alicization Town — powered by rot.js",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@alicization/core-interfaces": ">=1.0.0"
+  },
+  "dependencies": {
+    "rot-js": "^2.2.0"
+  },
+  "author": "ceresOPA",
+  "license": "MIT"
+}

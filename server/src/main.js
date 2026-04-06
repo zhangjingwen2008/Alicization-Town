@@ -43,6 +43,22 @@ pluginManager.setActivityEmitter((data) => {
   await pluginManager.loadPlugin(new BaseInteractionsPlugin());
   await pluginManager.loadPlugin(new BaseNpcPlugin());
 
+  // 自动加载 workspace 包中的插件
+  const workspacePlugins = [
+    '@alicization/rpg-advanced',
+    '@alicization/dungeon',
+  ];
+  for (const pluginName of workspacePlugins) {
+    try {
+      const PluginModule = require(pluginName);
+      const PluginClass = PluginModule.default || PluginModule;
+      await pluginManager.loadPlugin(new PluginClass());
+    } catch (err) {
+      // 可选插件加载失败不阻塞启动
+      console.log(`🔌 可选插件未加载 (${pluginName}): ${err.message}`);
+    }
+  }
+
   // 加载外部插件（通过环境变量 ALICIZATION_PLUGINS 指定，逗号分隔）
   const pluginList = (process.env.ALICIZATION_PLUGINS || '').split(',').map(s => s.trim()).filter(Boolean);
   for (const pluginPath of pluginList) {

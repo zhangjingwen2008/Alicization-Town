@@ -573,7 +573,8 @@ var require_auth_client = __commonJS({
         token: response.token,
         expiresAt: response.expires_at || new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
         leaseExpiresAt: response.lease_expires_at || null,
-        lastUsedAt: (/* @__PURE__ */ new Date()).toISOString()
+        lastUsedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        playerId: response.playerId || profile.playerId || null
       };
       saveProfile(nextProfile, targetServerFp);
       setDefaultProfileName(nextProfile.profile, targetServerFp);
@@ -587,7 +588,8 @@ var require_auth_client = __commonJS({
         server: nextProfile.server,
         lease_expires_at: nextProfile.leaseExpiresAt,
         message: response.message,
-        token: nextProfile.token
+        token: nextProfile.token,
+        playerId: nextProfile.playerId
       };
     }
     module2.exports = {

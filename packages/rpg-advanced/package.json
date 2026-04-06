@@ -1,0 +1,15 @@
+{
+  "name": "@alicization/rpg-advanced",
+  "version": "0.4.0",
+  "description": "Advanced RPG attribute system for Alicization Town",
+  "main": "src/index.js",
+  "peerDependencies": {
+    "@alicization/core-interfaces": ">=1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "javascript-obfuscator": "^4.1.1"
+  },
+  "author": "ceresOPA",
+  "license": "MIT"
+}
