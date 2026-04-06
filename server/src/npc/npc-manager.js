@@ -67,7 +67,11 @@ class NpcManager {
     const timer = setTimeout(async () => {
       if (!this.running) return;
       try {
-        await behavior.tick();
+        const result = await behavior.tick();
+        // Log the action result for visibility
+        if (result && result.detail) {
+          console.log(`[ai-npc] ${config.name}: ${result.detail}`);
+        }
         behavior.cleanupGreetHistory();
       } catch (err) {
         console.error(`🤖 NPC ${config.name} 行为异常:`, err.message);

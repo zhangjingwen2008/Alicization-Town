@@ -1,0 +1,52 @@
+# AI NPC 环境变量配置示例
+# 复制此文件为 .env 并填入你的配置
+
+# ===========================================
+# AI 服务提供商配置
+# ===========================================
+
+# AI 提供商: openai 或 claude
+AI_PROVIDER=openai
+
+# ===========================================
+# OpenAI 配置 (AI_PROVIDER=openai 时使用)
+# ===========================================
+
+OPENAI_API_KEY=sk-your-openai-api-key
+# 可选：自定义 OpenAI 兼容端点
+# OPENAI_BASE_URL=https://api.openai.com/v1
+# 可选：模型选择
+# OPENAI_MODEL=gpt-4o-mini
+
+# ===========================================
+# Claude 配置 (AI_PROVIDER=claude 时使用)
+# ===========================================
+
+# ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
+# 可选：自定义 Claude 兼容端点
+# ANTHROPIC_BASE_URL=https://api.anthropic.com/v1
+# 可选：模型选择
+# ANTHROPIC_MODEL=claude-3-haiku-20240307
+
+# ===========================================
+# AI NPC 行为配置
+# ===========================================
+
+# 是否启用 AI NPC (默认: true)
+# ALICIZATION_AI_NPC_ENABLED=true
+
+# AI 响应最大 token 数 (默认: 500)
+# AI_MAX_TOKENS=500
+
+# AI 响应温度 (默认: 0.7, 范围 0-2)
+# AI_TEMPERATURE=0.7
+
+# NPC 行动间隔范围 (毫秒)
+# AI_TICK_INTERVAL_MIN=5000
+# AI_TICK_INTERVAL_MAX=10000
+
+# 心跳刷新间隔 (毫秒, 默认: 10000)
+# AI_HEARTBEAT_INTERVAL=10000
+
+# AI 响应超时 (毫秒, 默认: 15000)
+# AI_RESPONSE_TIMEOUT=15000

@@ -1,5 +1,14 @@
 // NPC 角色配置
 // 定义常驻 NPC 的身份、外观、性格与行为参数
+//
+// AI NPC 配置说明:
+//   aiEnabled: true - 启用 AI 驱动行为
+//   strategy: 'ai/autonomous' - 使用 AI 自主决策策略
+//   personality: 对应提示词模板中的性格类型
+//
+// 环境变量:
+//   AI_PROVIDER=openai|claude
+//   OPENAI_API_KEY / ANTHROPIC_API_KEY
 
 const NPC_PROFILES = [
   {
@@ -9,7 +18,10 @@ const NPC_PROFILES = [
     personality: 'friendly',
     spawnX: 14,
     spawnY: 12,
-    // 行为权重：决定每次行动时选择各动作的概率
+    // AI 驱动 NPC
+    aiEnabled: true,
+    strategy: 'ai/autonomous',
+    // 行为权重：决定每次行动时选择各动作的概率（fallback 时使用）
     behaviorWeights: { wander: 0.3, chat: 0.4, interact: 0.2, idle: 0.1 },
     // 行动间隔范围（毫秒）
     actionIntervalMin: 4000,
@@ -17,7 +29,7 @@ const NPC_PROFILES = [
     // 漫步参数
     wanderStepsMin: 1,
     wanderStepsMax: 5,
-    // 聊天语料：空闲时随机说的话
+    // 聊天语料：空闲时随机说的话（fallback 时使用）
     idleChats: [
       '今天天气真不错，适合在小镇逛逛。',
       '欢迎来到 Alicization Town！这里是一个充满可能的地方。',
@@ -27,7 +39,7 @@ const NPC_PROFILES = [
       '我在这个小镇住了很多年了，有什么想知道的尽管问。',
       '集市上新来了一批货物，值得去看看。',
     ],
-    // 看到附近玩家时的问候语
+    // 看到附近玩家时的问候语（fallback 时使用）
     greetings: [
       '你好啊，旅行者！初来乍到吧？',
       '嗯？新面孔啊，欢迎欢迎！',
@@ -42,6 +54,9 @@ const NPC_PROFILES = [
     personality: 'stoic',
     spawnX: 30,
     spawnY: 25,
+    // AI 驱动 NPC
+    aiEnabled: true,
+    strategy: 'ai/autonomous',
     behaviorWeights: { wander: 0.5, chat: 0.1, interact: 0.3, idle: 0.1 },
     actionIntervalMin: 3000,
     actionIntervalMax: 6000,
@@ -67,6 +82,9 @@ const NPC_PROFILES = [
     personality: 'curious',
     spawnX: 20,
     spawnY: 8,
+    // AI 驱动 NPC
+    aiEnabled: true,
+    strategy: 'ai/autonomous',
     behaviorWeights: { wander: 0.4, chat: 0.3, interact: 0.25, idle: 0.05 },
     actionIntervalMin: 3000,
     actionIntervalMax: 7000,

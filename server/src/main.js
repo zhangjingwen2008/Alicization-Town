@@ -1,4 +1,7 @@
 // 服务端入口，统一组装接口服务、事件推送与实时通道
+// 加载 .env 环境变量（必须在其他模块之前）
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -11,6 +14,7 @@ const { PluginManager } = require('./engine/plugin-manager');
 const BaseInteractionsPlugin = require('./plugins/base-interactions');
 const BaseNpcPlugin = require('./plugins/base-npc');
 const BaseStatsPlugin = require('./plugins/base-stats');
+const createAiNpcPlugin = require('./plugins/ai-npc-plugin');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,11 +41,23 @@ pluginManager.setActivityEmitter((data) => {
   worldEngine.recordPluginActivity(data.id, data.text, data.type);
 });
 
+// AI NPC 插件实例（需要在顶层定义以便后续使用）
+const aiNpcPlugin = createAiNpcPlugin();
+
 (async () => {
   // 加载内置基础插件
   await pluginManager.loadPlugin(new BaseStatsPlugin());
   await pluginManager.loadPlugin(new BaseInteractionsPlugin());
   await pluginManager.loadPlugin(new BaseNpcPlugin());
+
+  // 加载 AI NPC 插件
+  console.log('[ai-npc] 正在加载 AI NPC 插件...');
+  try {
+    await pluginManager.loadPlugin(aiNpcPlugin);
+    console.log('[ai-npc] AI NPC 插件加载完成');
+  } catch (err) {
+    console.error('[ai-npc] Failed to load AI NPC plugin:', err.message);
+  }
 
   // 自动加载 workspace 包中的插件
   const workspacePlugins = [
@@ -96,6 +112,11 @@ pluginManager.setActivityEmitter((data) => {
   if (pluginRoutes.length > 0) {
     console.log(`🔌 已挂载 ${pluginRoutes.length} 条插件路由`);
   }
+
+  // ── 设置 AI NPC 世界引擎引用 ──────────────────────────────────────────────────────
+  const { setWorldEngine } = require('./plugins/ai-npc-plugin');
+  setWorldEngine(worldEngine);
+  // AI NPC 行为现在通过策略注册整合到 NpcBehavior 中，无需独立启动调度器
 })();
 
 // ── 通过 SSE 向网页观察端推送状态 ───────────────────────────────────────────
@@ -160,9 +181,44 @@ npcManager.start();
 app.locals.npcManager = npcManager;
 
 // ── 优雅关闭：清理 NPC ──────────────────────────────────────────────────────
-function gracefulShutdown() {
-  npcManager.stop();
-  server.close();
+let isShuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\n🛑 收到 ${signal} 信号，正在关闭...`);
+
+  try {
+    // 关闭所有 SSE 连接
+    sseClients.forEach(c => {
+      try { c.res.end(); } catch (e) {}
+    });
+    sseClients = [];
+
+    // 关闭 Socket.IO
+    io.close();
+
+    // 停止 NPC
+    npcManager.stop();
+
+    // 卸载插件
+    await pluginManager.unloadAllPlugins();
+
+    // 关闭 HTTP 服务器
+    server.close(() => {
+      console.log('✅ 服务器已关闭');
+      process.exit(0);
+    });
+
+    // 强制退出超时
+    setTimeout(() => {
+      console.log('⚠️ 强制退出');
+      process.exit(1);
+    }, 3000);
+
+  } catch (err) {
+    console.error('关闭时出错:', err.message);
+    process.exit(1);
+  }
 }
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

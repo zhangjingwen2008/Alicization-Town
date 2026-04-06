@@ -240,6 +240,16 @@ class PluginManager {
     }
     return list;
   }
+
+  /**
+   * 卸载所有插件。
+   */
+  async unloadAllPlugins() {
+    const pluginIds = Array.from(this._plugins.keys());
+    for (const id of pluginIds) {
+      await this.unloadPlugin(id);
+    }
+  }
 }
 
 module.exports = { PluginManager };

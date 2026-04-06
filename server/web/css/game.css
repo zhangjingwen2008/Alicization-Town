@@ -270,6 +270,7 @@ canvas {
 .activity-type-say { color: #74b9ff; }
 .activity-type-interact { color: #fdcb6e; }
 .activity-type-join { color: #00b894; }
+.activity-type-ai-npc { color: #a29bfe; }
 
 /* --- Chat log --- */
 #chatlog-container {

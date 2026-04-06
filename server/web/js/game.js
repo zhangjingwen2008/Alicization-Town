@@ -118,7 +118,8 @@
       heal: new Audio('assets/sounds/heal.wav'),
     };
     Object.values(sfx).forEach(s => { s.volume = 0.25; });
-    let sfxEnabled = true;
+    let sfxEnabled = false;
+    document.getElementById('sfx-toggle').textContent = 'SFX OFF';
     document.getElementById('sfx-toggle').addEventListener('click', () => {
       sfxEnabled = !sfxEnabled;
       document.getElementById('sfx-toggle').textContent = sfxEnabled ? 'SFX ON' : 'SFX OFF';
